@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GDP RegisterBot - Control Panel</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Boxicons for Premium Icons -->
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Detect Flexbox Gap support for PyQt5 browser engine compatibility -->
+    <script>
+        (function() {
+            var flex = document.createElement("div");
+            flex.style.display = "flex";
+            flex.style.flexDirection = "column";
+            flex.style.rowGap = "1px";
+            flex.appendChild(document.createElement("div"));
+            flex.appendChild(document.createElement("div"));
+            document.documentElement.appendChild(flex);
+            var isSupported = flex.scrollHeight === 2;
+            document.documentElement.removeChild(flex);
+            if (!isSupported) {
+                document.documentElement.classList.add("no-flex-gap");
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <i class="bx bxs-bot brand-icon"></i>
+                <div class="brand-text">
+                    <h1>RegisterBot</h1>
+                    <span>GDP-ToolAma v1.2</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-menu">
+                <a href="#" class="menu-item active" data-tab="dashboard">
+                    <i class="bx bxs-dashboard"></i>
+                    <span>Bảng Điều Khiển</span>
+                </a>
+                <a href="#" class="menu-item" data-tab="accounts">
+                    <i class="bx bxs-spreadsheet"></i>
+                    <span>Quản Lý Tài Khoản</span>
+                </a>
+                <a href="#" class="menu-item" data-tab="registered">
+                    <i class="bx bxs-user-check"></i>
+                    <span>Quản Trị Tài Khoản</span>
+                </a>
+                <a href="#" class="menu-item" data-tab="config">
+                    <i class="bx bxs-cog"></i>
+                    <span>Cấu Hình Hệ Thống</span>
+                </a>
+                <a href="#" class="menu-item" data-tab="logs">
+                    <i class="bx bx-terminal"></i>
+                    <span>Nhật Ký Hệ Thống</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-status-card">
+                <div class="card-status-dot idle"></div>
+                <div class="card-status-info">
+                    <p class="status-label">Trạng thái</p>
+                    <p class="status-value" id="sidebar-status-text">Đang Dừng</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="header">
+                <div class="header-title">
+                    <h2 id="page-title">Bảng Điều Khiển</h2>
+                    <p class="text-secondary" id="page-subtitle">Giám sát và kiểm soát quá trình đăng ký tài khoản tự động</p>
+                </div>
+                <div class="header-actions">
+                    <div class="status-badge idle" id="header-status-badge">
+                        <span class="pulse-dot"></span>
+                        <span class="badge-text" id="header-status-text">IDLE</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content-body">
+                <!-- ================= TAB: DASHBOARD ================= -->
+                <section class="tab-content active" id="tab-dashboard">
+                    <!-- Stats Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon bg-blue-light">
+                                <i class="bx bx-list-ol text-blue"></i>
+                            </div>
+                            <div class="stat-info">
+                                <p class="stat-label">Tổng Tài Khoản</p>
+                                <h3 class="stat-value" id="stats-total">0</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bg-green-light">
+                                <i class="bx bx-check-circle text-green"></i>
+                            </div>
+                            <div class="stat-info">
+                                <p class="stat-label">Thành Công</p>
+                                <h3 class="stat-value text-green" id="stats-success">0</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bg-red-light">
+                                <i class="bx bx-x-circle text-red"></i>
+                            </div>
+                            <div class="stat-info">
+                                <p class="stat-label">Thất Bại</p>
+                                <h3 class="stat-value text-red" id="stats-failed">0</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bg-purple-light">
+                                <i class="bx bx-pie-chart-alt text-purple"></i>
+                            </div>
+                            <div class="stat-info">
+                                <p class="stat-label">Tỷ Lệ</p>
+                                <h3 class="stat-value" id="stats-rate">0%</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Dashboard Section -->
+                    <div class="dashboard-main">
+                        <div class="dashboard-left">
+                            <!-- Controller Card -->
+                            <div class="card glass-card control-card">
+                                <div class="card-header">
+                                    <h3>Điều Khiển Tiến Trình</h3>
+                                </div>
+                                 <div class="card-body">
+                                     <!-- Product URL Input -->
+                                     <div class="product-url-group">
+                                         <label for="input-product-url">
+                                             <i class="bx bx-link-alt text-primary"></i>
+                                             Link Sản Phẩm Amazon JP
+                                         </label>
+                                         <div class="product-url-input-wrapper">
+                                             <input type="url" id="input-product-url" 
+                                                    placeholder="https://www.amazon.co.jp/dp/..." 
+                                                    autocomplete="off"
+                                                    spellcheck="false">
+                                             <span class="url-validation-icon" id="url-validation-icon"></span>
+                                         </div>
+                                         <span class="help-text">Dán link sản phẩm Amazon Japan có nút "招待をリクエストする" (Request Invitation)</span>
+                                     </div>
+
+                                     <div class="btn-group">
+                                         <button class="btn btn-primary btn-lg" id="btn-start">
+                                             <i class="bx bx-play"></i> Bắt Đầu Chạy
+                                         </button>
+                                         <button class="btn btn-danger btn-lg" id="btn-stop" disabled>
+                                             <i class="bx bx-stop"></i> Dừng Chạy
+                                         </button>
+                                     </div>
+                                    <div class="run-progress-bar-container">
+                                        <div class="progress-info">
+                                            <span id="progress-text">Chưa chạy</span>
+                                            <span id="progress-percent">0%</span>
+                                        </div>
+                                        <div class="progress-bar-outer">
+                                            <div class="progress-bar-inner" id="progress-bar" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="download-results-action btn-group margin-top" style="display: flex; gap: 10px;">
+                                         <button class="btn btn-success btn-block" id="btn-save-run-results" disabled style="flex: 1; padding: 12px 16px;">
+                                             <i class="bx bx-save"></i> Lưu Kết Quả
+                                         </button>
+                                         <a href="/api/download/results" class="btn btn-secondary btn-block" id="btn-download-results" download style="flex: 1; text-align: center; display: inline-flex; align-items: center; justify-content: center; margin-top: 0;">
+                                             <i class="bx bx-download"></i> Tải Kết Quả
+                                         </a>
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Mini Logs -->
+                        <div class="dashboard-right">
+                            <div class="card glass-card logs-mini-card">
+                                <div class="card-header">
+                                    <h3>Nhật Ký Hoạt Động (Thời Gian Thực)</h3>
+                                    <a href="#" class="view-all-logs-link" onclick="switchTab('logs')">Xem tất cả</a>
+                                </div>
+                                <div class="card-body terminal-body scrollable-y" id="mini-console">
+                                    <div class="terminal-line system-line">[Hệ thống] Sẵn sàng thực thi. Vui lòng bấm "Bắt Đầu Chạy" để đăng ký.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Results List -->
+                    <div class="card glass-card margin-top">
+                        <div class="card-header">
+                            <h3>Báo Cáo Chi Tiết Chạy Hiện Tại</h3>
+                        </div>
+                        <div class="card-body overflow-x">
+                            <table class="data-table" id="live-results-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Status</th>
+                                        <th>Note</th>
+                                        <th>Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="empty-row">
+                                        <td colspan="5" class="text-center text-secondary">Chưa chạy hoặc chưa có tài khoản nào được đăng ký</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ================= TAB: ACCOUNTS ================= -->
+                <section class="tab-content" id="tab-accounts">
+                    <div class="card glass-card">
+                        <div class="card-header row-layout justify-between flex-wrap gap-md">
+                            <div class="accounts-header-left">
+                                <h3>Danh Sách Đăng Ký (accounts.xlsx)</h3>
+                                <p class="text-secondary text-sm">Chỉnh sửa danh sách trực tiếp trên bảng hoặc tải lên file Excel mới</p>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-success" id="btn-add-account">
+                                    <i class="bx bx-plus"></i> Thêm Dòng
+                                </button>
+                                <button class="btn btn-danger" id="btn-clear-accounts-grid">
+                                    <i class="bx bx-trash"></i> Xóa tất cả
+                                </button>
+                                <button class="btn btn-primary" id="btn-save-accounts" disabled>
+                                    <i class="bx bx-save"></i> Lưu Thay Đổi
+                                </button>
+                                <a href="/api/download/accounts" class="btn btn-secondary" download>
+                                    <i class="bx bx-download"></i> Tải Mẫu
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Excel Drag and Drop Upload -->
+                            <div class="upload-dropzone" id="excel-dropzone">
+                                <i class="bx bxs-file-export upload-icon"></i>
+                                <p>Kéo thả file Excel vào đây hoặc <span class="browse-link">chọn file</span> để xem trước và chuẩn hóa trên bảng</p>
+                                <input type="file" id="excel-file-input" accept=".xlsx" style="display: none;">
+                            </div>
+
+
+                            <!-- Interactive Accounts Data Grid -->
+                            <div class="accounts-table-container margin-top">
+                                <table class="data-table input-table" id="accounts-grid">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 5%">#</th>
+                                            <th style="width: 25%">Tên (Name)</th>
+                                            <th style="width: 30%">Email</th>
+                                            <th style="width: 20%">Mật Khẩu (Password)</th>
+                                            <th style="width: 15%">Proxy riêng (Nếu có)</th>
+                                            <th style="width: 5%">Xoá</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="accounts-grid-body">
+                                        <!-- Dynamically generated rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ================= TAB: REGISTERED ================= -->
+                <section class="tab-content" id="tab-registered">
+                    <div class="card glass-card">
+                        <div class="card-header row-layout justify-between flex-wrap gap-md">
+                            <div class="accounts-header-left">
+                                <h3>Cơ Sở Dữ Liệu Quản Trị Tài Khoản (registered_accounts.xlsx)</h3>
+                                <p class="text-secondary text-sm">Hiển thị, tìm kiếm và tải về tất cả tài khoản đã đăng ký thành công</p>
+                            </div>
+                            <div class="row-layout align-center gap-md">
+                                 <div class="filter-group row-layout align-center gap-sm" style="display: flex; align-items: center; gap: 8px;">
+                                     <label for="registered-group-filter" style="font-size: 13px; color: var(--text-secondary); white-space: nowrap; margin-bottom: 0;">Lọc nhóm:</label>
+                                     <select id="registered-group-filter" class="form-control" style="padding: 8px 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: var(--text-primary); outline: none; font-size: 13px; min-width: 140px;">
+                                         <option value="">Tất cả</option>
+                                     </select>
+                                 </div>
+                                 <div class="search-box">
+                                     <i class="bx bx-search search-icon"></i>
+                                     <input type="text" id="registered-filter-input" placeholder="Tìm kiếm...">
+                                 </div>
+                                 <a href="/api/download/registered" class="btn btn-secondary" id="btn-download-registered" download>
+                                     <i class="bx bx-download"></i> Tải Về Excel
+                                 </a>
+                                 <button class="btn btn-danger" id="btn-clear-registered">
+                                     <i class="bx bx-trash"></i> Xóa Dữ Liệu
+                                 </button>
+                             </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="accounts-table-container">
+                                <table class="data-table" id="registered-grid">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 5%">#</th>
+                                            <th style="width: 15%">Nhóm (Group)</th>
+                                            <th style="width: 15%">Tên (Name)</th>
+                                            <th style="width: 20%">Email</th>
+                                            <th style="width: 15%">Mật Khẩu</th>
+                                            <th style="width: 10%">Proxy</th>
+                                            <th style="width: 10%">Trạng thái</th>
+                                            <th style="width: 10%">Thời gian</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="registered-grid-body">
+                                        <!-- Dynamically generated rows -->
+                                        <tr class="empty-row">
+                                            <td colspan="8" class="text-center text-secondary">Chưa có tài khoản nào được đăng ký</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ================= TAB: CONFIG ================= -->
+                <section class="tab-content" id="tab-config">
+                    <form id="config-form">
+                        <div class="config-grid">
+                            <!-- Column 1: Server and Core configs -->
+                            <div class="config-column">
+                                <div class="card glass-card">
+                                    <div class="card-header">
+                                        <h3><i class="bx bx-globe text-primary"></i> Máy Chủ & Môi Trường</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-group">
+                                            <label for="cfg-base_url">URL Server Nhận Đăng Ký (base_url)</label>
+                                            <input type="url" id="cfg-base_url" name="base_url" placeholder="http://localhost:8000" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-product_url">
+                                                <i class="bx bx-link-alt text-primary" style="font-size: 16px; vertical-align: middle;"></i>
+                                                Link Sản Phẩm Amazon JP (product_url)
+                                            </label>
+                                            <input type="url" id="cfg-product_url" name="product_url" placeholder="https://www.amazon.co.jp/dp/...">
+                                            <span class="help-text">Link sản phẩm Amazon Japan. Tracking tokens sẽ tự động được randomize cho mỗi tài khoản (Anti-detection).</span>
+                                        </div>
+                                        <div class="form-row-2">
+                                            <div class="form-group">
+                                                <label for="cfg-max_concurrent_tasks">Số Trình Duyệt Chạy Đồng Thời</label>
+                                                <input type="number" id="cfg-max_concurrent_tasks" name="max_concurrent_tasks" min="1" max="10" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="cfg-headless">Ẩn Trình Duyệt (Headless)</label>
+                                                <div class="toggle-switch-container">
+                                                    <label class="switch">
+                                                        <input type="checkbox" id="cfg-headless" name="headless">
+                                                        <span class="slider round"></span>
+                                                    </label>
+                                                    <span class="toggle-switch-label" id="headless-label">Hiện trình duyệt</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card glass-card margin-top">
+                                    <div class="card-header">
+                                        <h3><i class="bx bx-envelope text-primary"></i> Cấu Hình Gmail IMAP (Đọc OTP)</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-group">
+                                            <label for="cfg-gmail_address">Địa Chỉ Gmail</label>
+                                            <input type="email" id="cfg-gmail_address" name="gmail_address" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-gmail_app_password">Gmail Mật Khẩu Ứng Dụng (App Password 16 ký tự)</label>
+                                            <input type="password" id="cfg-gmail_app_password" name="gmail_app_password" placeholder="xxxx xxxx xxxx xxxx" required>
+                                            <span class="help-text">Tạo mật khẩu ứng dụng Gmail của bạn tại phần Bảo Mật trong Google Account.</span>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-imap_server">Máy Chủ IMAP</label>
+                                            <input type="text" id="cfg-imap_server" name="imap_server" placeholder="imap.gmail.com" required>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card glass-card margin-top">
+                                    <div class="card-header">
+                                        <h3><i class="bx bx-time-five text-primary"></i> Thời Gian Chờ (Timings)</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row-2">
+                                            <div class="form-group">
+                                                <label for="cfg-otp_wait_seconds">Chờ OTP Gmail (giây)</label>
+                                                <input type="number" id="cfg-otp_wait_seconds" name="otp_wait_seconds" min="10" max="300" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="cfg-delay_between_accounts">Giãn Cách Giữa Các Acc (giây)</label>
+                                                <input type="number" id="cfg-delay_between_accounts" name="delay_between_accounts" min="0" max="60" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Column 2: Proxy settings -->
+                            <div class="config-column">
+                                <!-- XiaoWei Phone Mode -->
+                                <div class="card glass-card xiaowei-card">
+                                    <div class="card-header">
+                                        <h3><i class="bx bxs-phone text-primary"></i> Chế Độ Điện Thoại (XiaoWei)</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-group">
+                                            <div class="row-layout justify-between align-center">
+                                                <div>
+                                                    <label for="cfg-xiaowei_enable" style="margin-bottom: 0;">Bật Chế Độ Điện Thoại</label>
+                                                    <span class="help-text" style="display: block; margin-top: 2px;">Sử dụng điện thoại thật thay vì trình duyệt PC</span>
+                                                </div>
+                                                <label class="switch">
+                                                    <input type="checkbox" id="cfg-xiaowei_enable" name="xiaowei_enable">
+                                                    <span class="slider round"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="xiaowei-dependent-fields" id="xiaowei-fields">
+                                            <div class="form-group">
+                                                <label for="cfg-xiaowei_api_type">Loại API Điện thoại</label>
+                                                <select id="cfg-xiaowei_api_type" name="xiaowei_api_type" class="form-control" style="padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text-primary); font-size: 14px; width: 100%; box-sizing: border-box; outline: none;">
+                                                    <option value="xiaowei">XiaoWei Boxphone (Port 22222)</option>
+                                                    <option value="phone_farm">GDP Phone Farm API (Port 5000)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="cfg-xiaowei_api_url">URL API kết nối</label>
+                                                <div style="display: flex; gap: 8px;">
+                                                    <input type="url" id="cfg-xiaowei_api_url" name="xiaowei_api_url" placeholder="http://localhost:20026" style="flex: 1;">
+                                                    <button type="button" class="btn btn-success" id="btn-test-xiaowei" style="white-space: nowrap; padding: 8px 16px;">
+                                                        <i class="bx bx-plug"></i> Kiểm Tra
+                                                    </button>
+                                                </div>
+                                                <span class="help-text">Port API mặc định của XiaoWei (kiểm tra trong cài đặt phần mềm XiaoWei)</span>
+                                            </div>
+                                            <div class="form-row-2">
+                                                <div class="form-group">
+                                                    <label for="cfg-xiaowei_otp_source">Nguồn OTP</label>
+                                                    <select id="cfg-xiaowei_otp_source" name="xiaowei_otp_source" class="form-control" style="padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text-primary); font-size: 14px;">
+                                                        <option value="sms">SMS (từ SIM điện thoại)</option>
+                                                        <option value="gmail">Gmail (như cấu hình IMAP)</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="cfg-xiaowei_devices">Thiết Bị Sử Dụng</label>
+                                                    <input type="text" id="cfg-xiaowei_devices" name="xiaowei_devices" placeholder="all" value="all">
+                                                    <span class="help-text">"all" hoặc serial: "S1,S2"</span>
+                                                </div>
+                                            </div>
+                                            <!-- Device list panel -->
+                                            <div class="xiaowei-devices-panel" id="xiaowei-devices-panel" style="display: none;">
+                                                <div class="card-header" style="padding: 10px 0 6px 0;">
+                                                    <h3 style="font-size: 13px;"><i class="bx bx-devices text-green"></i> Thiết Bị Đang Kết Nối</h3>
+                                                </div>
+                                                <div id="xiaowei-devices-list" class="xiaowei-devices-grid">
+                                                    <p class="text-secondary text-sm">Bấm "Kiểm Tra" để quét thiết bị...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card glass-card margin-top">
+                                    <div class="card-header">
+                                        <h3><i class="bx bx-shield-quarter text-primary"></i> Proxy Boxphone & Đổi IP</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-group">
+                                            <div class="row-layout justify-between align-center">
+                                                <label for="cfg-proxy_enable" style="margin-bottom: 0;">Kích Hoạt Proxy</label>
+                                                <label class="switch">
+                                                    <input type="checkbox" id="cfg-proxy_enable" name="proxy_enable">
+                                                    <span class="slider round"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="proxy-dependent-fields" id="proxy-fields">
+                                            <div class="form-group">
+                                                <label for="cfg-proxy_server">Địa Chỉ Server Proxy (HTTP/SOCKS5)</label>
+                                                <input type="text" id="cfg-proxy_server" name="proxy_server" placeholder="http://127.0.0.1:1080">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="cfg-proxy_change_ip_url">URL API Đổi IP Boxphone</label>
+                                                <input type="url" id="cfg-proxy_change_ip_url" name="proxy_change_ip_url" placeholder="http://api.boxphone.../change?index={index}">
+                                                <span class="help-text">URL để trigger đổi IP mạng. Hỗ trợ <code>{index}</code> và <code>{email}</code>.</span>
+                                            </div>
+                                            <div class="form-row-2">
+                                                <div class="form-group">
+                                                    <label for="cfg-proxy_change_ip_delay">Độ Trễ Sau Đổi IP (giây)</label>
+                                                    <input type="number" id="cfg-proxy_change_ip_delay" name="proxy_change_ip_delay" min="1" max="120">
+                                                </div>
+                                                <div class="form-group">
+                                                    <div class="row-layout align-center" style="height: 100%; padding-top: 25px;">
+                                                        <label class="switch">
+                                                            <input type="checkbox" id="cfg-proxy_verify_ip" name="proxy_verify_ip">
+                                                            <span class="slider round"></span>
+                                                        </label>
+                                                        <span style="margin-left: 10px; font-size: 13px;">Kiểm tra IP khi đổi</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card glass-card margin-top">
+                                    <div class="card-header">
+                                        <h3><i class="bx bx-code-alt text-primary"></i> HTML CSS Selectors (Form Fields)</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-group">
+                                            <label for="cfg-sel-name">Selector cho Họ Tên (Name Input)</label>
+                                            <input type="text" id="cfg-sel-name" name="sel_name" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-sel-email">Selector cho Email Input</label>
+                                            <input type="text" id="cfg-sel-email" name="sel_email" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-sel-password">Selector cho Mật Khẩu (Password Input)</label>
+                                            <input type="text" id="cfg-sel-password" name="sel_password" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-sel-submit">Selector cho Nút Đăng Ký (Submit Form)</label>
+                                            <input type="text" id="cfg-sel-submit" name="sel_submit" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-sel-otp">Selector cho Ô Nhập OTP (6 chữ số)</label>
+                                            <input type="text" id="cfg-sel-otp" name="sel_otp" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-sel-otp_submit">Selector cho Nút Gửi OTP (Submit OTP)</label>
+                                            <input type="text" id="cfg-sel-otp_submit" name="sel_otp_submit" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="config-submit-bar margin-top">
+                            <button type="submit" class="btn btn-primary btn-lg" id="btn-save-config">
+                                <i class="bx bx-save"></i> Lưu Cấu Hình Hệ Thống
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- ================= TAB: LOGS ================= -->
+                <section class="tab-content" id="tab-logs">
+                    <div class="card glass-card logs-full-card">
+                        <div class="card-header row-layout justify-between flex-wrap gap-md">
+                            <div class="logs-header-left">
+                                <h3>Hệ Thống Logs</h3>
+                                <p class="text-secondary text-sm">Hiển thị mọi tác vụ, tiến trình chạy và thông báo lỗi từ Playwright</p>
+                            </div>
+                            <div class="row-layout align-center gap-md">
+                                <div class="search-box">
+                                    <i class="bx bx-search search-icon"></i>
+                                    <input type="text" id="logs-filter-input" placeholder="Lọc log...">
+                                </div>
+                                <button class="btn btn-secondary" id="btn-clear-logs">
+                                    <i class="bx bx-trash"></i> Xóa Màn Hình
+                                </button>
+                                <div class="row-layout align-center">
+                                    <label class="switch switch-sm">
+                                        <input type="checkbox" id="btn-autoscroll-logs" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span style="font-size: 13px; margin-left: 8px;">Tự cuộn</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body terminal-body scrollable-y full-terminal" id="logs-console">
+                            <div class="terminal-line system-line">[Hệ thống] Trình xem log hoàn chỉnh đã khởi động.</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast">
+        <i class="bx bx-check-circle toast-icon" id="toast-icon"></i>
+        <div class="toast-content">
+            <span class="toast-text" id="toast-message">Thành công!</span>
+        </div>
+    </div>
+
+    <!-- Reusable Custom Confirmation Modal -->
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3 id="confirm-modal-title" style="margin: 0; font-size: 18px; font-weight: 600;"><i class="bx bx-help-circle text-primary" style="margin-right: 8px; font-size: 20px; vertical-align: middle;"></i>Xác nhận</h3>
+            </div>
+            <div class="modal-body" style="margin-top: 15px;">
+                <p id="confirm-modal-message" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-secondary);">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+            </div>
+            <div class="modal-footer btn-group" style="margin-top: 24px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" id="confirm-modal-cancel" style="padding: 10px 20px;">Hủy bỏ</button>
+                <button class="btn btn-danger" id="confirm-modal-ok" style="padding: 10px 20px;">Đồng ý</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Save Results & Grouping Modal -->
+    <div id="save-results-modal" class="modal-overlay">
+        <div class="modal-content glass-card" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 600;"><i class="bx bx-save text-success" style="margin-right: 8px; font-size: 20px; vertical-align: middle;"></i>Lưu Kết Quả Vào Quản Trị</h3>
+            </div>
+            <div class="modal-body" style="margin-top: 15px;">
+                <p class="text-secondary text-sm" style="margin-bottom: 20px; font-size: 13px; line-height: 1.4;">Gom nhóm các tài khoản vừa được tạo thành công để quản lý dễ dàng hơn.</p>
+                
+                <!-- Option 1: Select existing group -->
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label for="save-existing-group" style="font-weight: 500; font-size: 13px; margin-bottom: 6px; display: block; color: var(--text-secondary);">Chọn nhóm đã có sẵn</label>
+                    <select id="save-existing-group" class="form-control" style="width: 100%; padding: 10px 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: var(--text-primary); outline: none; font-size: 14px;">
+                        <option value="">-- Tạo nhóm mới --</option>
+                    </select>
+                </div>
+                
+                <!-- Option 2: Enter new group name -->
+                <div class="form-group" id="new-group-name-container">
+                    <label for="save-new-group-name" style="font-weight: 500; font-size: 13px; margin-bottom: 6px; display: block; color: var(--text-secondary);">Hoặc nhập tên Nhóm Mới</label>
+                    <input type="text" id="save-new-group-name" class="form-control" placeholder="Ví dụ: Nhóm Tài Khoản Ngày 09/06" style="width: 100%; padding: 10px 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: var(--text-primary); outline: none; font-size: 14px; box-sizing: border-box;">
+                </div>
+            </div>
+            <div class="modal-footer btn-group" style="margin-top: 24px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" id="save-results-cancel" style="padding: 10px 20px;">Hủy bỏ</button>
+                <button class="btn btn-success" id="save-results-confirm" style="padding: 10px 20px;">Lưu Dữ Liệu</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+2026-06-08 21:25:40 [INFO] Đọc được 3 dòng từ data\accounts.xlsx
+2026-06-08 21:25:40 [INFO] Loaded 3 accounts from data/accounts.xlsx
+2026-06-08 21:25:40 [INFO] Bắt đầu chạy đăng ký song song (Tối đa 3 trình duyệt đồng thời)...
+2026-06-08 21:25:45 [INFO] [Worker] Bắt đầu đăng ký tài khoản #1: testa@example.com
+2026-06-08 21:25:45 [INFO] [Worker] Bắt đầu đăng ký tài khoản #2: testb@example.com
+2026-06-08 21:25:45 [INFO] [Worker] Bắt đầu đăng ký tài khoản #3: testc@example.com
+2026-06-08 21:25:47 [INFO] [testb@example.com] Step 1 – Loading register form...
+2026-06-08 21:25:47 [INFO] [testc@example.com] Step 1 – Loading register form...
+2026-06-08 21:25:47 [INFO] [testa@example.com] Step 1 – Loading register form...
+2026-06-08 21:26:08 [ERROR] [testb@example.com] Error – Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+Traceback (most recent call last):
+  File "main.py", line 68, in register_one
+  File "playwright\async_api\_generated.py", line 9611, in goto
+  File "playwright\_impl\_page.py", line 557, in goto
+  File "playwright\_impl\_frame.py", line 156, in goto
+  File "playwright\_impl\_connection.py", line 69, in send
+  File "playwright\_impl\_connection.py", line 559, in wrap_api_call
+playwright._impl._errors.Error: Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+
+2026-06-08 21:26:08 [ERROR] [testc@example.com] Error – Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+Traceback (most recent call last):
+  File "main.py", line 68, in register_one
+  File "playwright\async_api\_generated.py", line 9611, in goto
+  File "playwright\_impl\_page.py", line 557, in goto
+  File "playwright\_impl\_frame.py", line 156, in goto
+  File "playwright\_impl\_connection.py", line 69, in send
+  File "playwright\_impl\_connection.py", line 559, in wrap_api_call
+playwright._impl._errors.Error: Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+
+2026-06-08 21:26:08 [ERROR] [testa@example.com] Error – Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+Traceback (most recent call last):
+  File "main.py", line 68, in register_one
+  File "playwright\async_api\_generated.py", line 9611, in goto
+  File "playwright\_impl\_page.py", line 557, in goto
+  File "playwright\_impl\_frame.py", line 156, in goto
+  File "playwright\_impl\_connection.py", line 69, in send
+  File "playwright\_impl\_connection.py", line 559, in wrap_api_call
+playwright._impl._errors.Error: Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+
+2026-06-08 21:26:14 [INFO] 📊 Đã lưu kết quả: data/results.xlsx (0/3 thành công)
+2026-06-08 21:26:14 [INFO] 
+✅ Done. Results saved to: data/results.xlsx
+2026-06-08 21:26:14 [INFO] 
+════════════════════════════════════════
+2026-06-08 21:26:14 [INFO] SUMMARY: 0/3 succeeded
+2026-06-08 21:26:14 [INFO]   ❌ testc@example.com – Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+
+2026-06-08 21:26:14 [INFO]   ❌ testa@example.com – Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+
+2026-06-08 21:26:14 [INFO]   ❌ testb@example.com – Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8000/huy/register
+Call log:
+  - navigating to "http://localhost:8000/huy/register", waiting until "domcontentloaded"
+
+2026-06-08 21:26:14 [INFO] ════════════════════════════════════════
+2026-06-08 21:42:11 [INFO] Đọc được 3 dòng từ data\accounts.xlsx
+2026-06-08 21:42:57 [INFO] Đọc được 3 dòng từ data\accounts.xlsx
+2026-06-08 21:42:57 [INFO] Loaded 3 accounts from data/accounts.xlsx
+2026-06-08 21:42:57 [INFO] Bắt đầu chạy đăng ký song song (Tối đa 3 trình duyệt đồng thời)...
+2026-06-08 21:43:01 [INFO] [Worker] Bắt đầu đăng ký tài khoản #1: testa@example.com
+2026-06-09 09:00:07 [INFO] Đọc được 3 dòng từ data\accounts.xlsx
+2026-06-09 09:00:07 [INFO] Loaded 3 accounts from data/accounts.xlsx
+2026-06-09 09:00:07 [INFO] Bắt đầu chạy đăng ký song song (Tối đa 3 trình duyệt đồng thời)...
+2026-06-09 09:00:09 [INFO] [Worker] Bắt đầu đăng ký tài khoản #1: testa@example.com
+2026-06-09 09:00:09 [INFO] [Worker] Bắt đầu đăng ký tài khoản #2: testb@example.com
+2026-06-09 09:00:09 [INFO] [Worker] Bắt đầu đăng ký tài khoản #3: testc@example.com
+2026-06-09 09:00:09 [INFO] [testa@example.com] Step 1 – Loading register form...
+2026-06-09 09:00:09 [INFO] [testb@example.com] Step 1 – Loading register form...
+2026-06-09 09:00:09 [INFO] [testc@example.com] Step 1 – Loading register form...
+2026-06-09 09:00:13 [INFO] 📊 Đã lưu kết quả: data/results.xlsx (0/3 thành công)
+2026-06-09 09:00:13 [INFO] 
+✅ Done. Results saved to: data/results.xlsx
+2026-06-09 09:00:13 [INFO] 
+════════════════════════════════════════
+2026-06-09 09:00:13 [INFO] SUMMARY: 0/3 succeeded
+2026-06-09 09:00:13 [INFO]   ❌ testb@example.com – CSRF token not found
+2026-06-09 09:00:13 [INFO]   ❌ testc@example.com – CSRF token not found
+2026-06-09 09:00:13 [INFO]   ❌ testa@example.com – CSRF token not found
+2026-06-09 09:00:13 [INFO] ════════════════════════════════════════
+2026-06-09 09:10:39 [INFO] Đang chạy máy chủ Flask ngầm tại: http://127.0.0.1:8000
+2026-06-09 09:10:39 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8000
+2026-06-09 09:10:39 [INFO] [33mPress CTRL+C to quit[0m
+2026-06-09 09:10:39 [INFO] Đang khởi chạy cửa sổ ứng dụng desktop...
+2026-06-09 09:10:40 [WARNING] MSHTML is deprecated. See https://pywebview.flowrl.com/guide/web_engine.html on details how to use Edge Chromium
+2026-06-09 09:10:40 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:40] "GET / HTTP/1.1" 200 -
+2026-06-09 09:10:40 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:40] "GET /static/css/style.css HTTP/1.1" 200 -
+2026-06-09 09:10:40 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:40] "GET /static/js/app.js HTTP/1.1" 200 -
+2026-06-09 09:10:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:10:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:10:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:10:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:10:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:10:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:10:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:11:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:11:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:11:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:11:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:11:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:11:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:11:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:11:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:11:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:11:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:11:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:11:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:12:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:12:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:12:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:12:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:12:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:12:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:12:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:12:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:12:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:12:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:12:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:12:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:13:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:13:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:13:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:13:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:13:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:13:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:13:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:13:41] "GET /api/status HTTP/1.1" 200 -
+2026-06-09 09:13:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:13:41] "GET /api/logs?since=500 HTTP/1.1" 200 -
+2026-06-09 09:13:41 [INFO] 127.0.0.1 - - [09/Jun/2026 09:13:41] "GET /api/status HTTP/1.1" 200 -

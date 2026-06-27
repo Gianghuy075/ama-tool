@@ -1,0 +1,142 @@
+=== STDOUT ===
+
+=== STDERR ===
+204 INFO: PyInstaller: 6.21.0, contrib hooks: 2026.6
+205 INFO: Python: 3.12.10
+245 INFO: Platform: Windows-10-10.0.19045-SP0
+245 INFO: Python environment: C:\Users\Admin\AppData\Local\Programs\Python\Python312
+250 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\Admin\\.gemini\\antigravity\\scratch\\android_phone_farm',
+ 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\python312.zip',
+ 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\DLLs',
+ 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib',
+ 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312',
+ 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages',
+ 'C:\\Users\\Admin\\.gemini\\antigravity\\scratch\\android_phone_farm']
+805 INFO: checking Analysis
+853 INFO: Building because excludes changed
+853 INFO: Looking for Python shared library...
+853 INFO: Using Python shared library: C:\Users\Admin\AppData\Local\Programs\Python\Python312\python312.dll
+853 INFO: Running Analysis Analysis-00.toc
+853 INFO: Target bytecode optimization level: 0
+853 INFO: Initializing module dependency graph...
+855 INFO: Initializing module graph hook caches...
+880 INFO: Analyzing modules for base_library.zip ...
+2462 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+3312 INFO: Processing standard module hook 'hook-math.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+4850 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+6209 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+6871 INFO: Caching module dependency graph...
+6938 INFO: Analyzing C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\main.py
+6945 INFO: Processing standard module hook 'hook-PyQt6.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+7946 INFO: Processing standard module hook 'hook-PyQt6.QtWidgets.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+10592 INFO: Processing standard module hook 'hook-PyQt6.QtCore.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+14657 INFO: Processing standard module hook 'hook-PyQt6.QtGui.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+30286 INFO: Processing standard module hook 'hook-PyQt6.QtSvg.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+30593 INFO: Processing standard module hook 'hook-urllib3.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+30832 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+30834 INFO: SetuptoolsInfo: initializing cached setuptools info...
+31670 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+31679 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+31735 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+31741 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31818 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+31826 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31826 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco'!
+31845 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31846 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
+32048 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+32391 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+32523 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+32883 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+33533 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+33840 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+33842 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+34383 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+34384 INFO: Setuptools: 'importlib_metadata' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.importlib_metadata'!
+34444 INFO: Processing standard module hook 'hook-setuptools._vendor.importlib_metadata.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+34480 INFO: Processing pre-safe-import-module hook 'hook-zipp.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+34481 INFO: Setuptools: 'zipp' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.zipp'!
+34876 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+34877 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+35622 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+35623 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
+36230 INFO: Processing standard module hook 'hook-certifi.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+36296 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\device.py:34: SyntaxWarning: invalid escape sequence '\s'
+  INSTALL_RESULT_PATTERN = "(Success|Failure|Error)\s?(.*)"
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\command\transport\__init__.py:95: SyntaxWarning: invalid escape sequence '\['
+  result_pattern = "^\[([\s\S]*?)\]: \[([\s\S]*?)\]\r?$"
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:35: SyntaxWarning: invalid escape sequence '\s'
+  pattern = "ACTIVITY\s([\w\.]+)/([\w\.]+)\s[\w\d]+\spid=([\d]+)"
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:48: SyntaxWarning: invalid escape sequence '\s'
+  total_meminfo_re = re.compile('\s*TOTAL\s*(?P<pss>\d+)'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:49: SyntaxWarning: invalid escape sequence '\s'
+  '\s*(?P<private_dirty>\d+)'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:50: SyntaxWarning: invalid escape sequence '\s'
+  '\s*(?P<private_clean>\d+)'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:51: SyntaxWarning: invalid escape sequence '\s'
+  '\s*(?P<swapped_dirty>\d+)'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:52: SyntaxWarning: invalid escape sequence '\s'
+  '\s*(?P<heap_size>\d+)'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:53: SyntaxWarning: invalid escape sequence '\s'
+  '\s*(?P<heap_alloc>\d+)'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:54: SyntaxWarning: invalid escape sequence '\s'
+  '\s*(?P<heap_free>\d+)')
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:85: SyntaxWarning: invalid escape sequence '\d'
+  pattern = "userId=([\d]+)"
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\utils.py:102: SyntaxWarning: invalid escape sequence '\d'
+  pattern = "versionName=([\d\.]+)"
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\wm.py:12: SyntaxWarning: invalid escape sequence '\s'
+  SIZE_RE = 'Physical size:\s([\d]+)x([\d]+)'
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\traffic.py:36: SyntaxWarning: invalid escape sequence '\d'
+  pattern = "userId=([\d]+)"
+C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\ppadb\plugins\device\cpustat.py:90: SyntaxWarning: invalid escape sequence '\s'
+  "cpu\s+([\d]+)\s([\d]+)\s([\d]+)\s([\d]+)\s([\d]+)\s([\d]+)\s([\d]+)\s([\d]+)\s([\d]+)\s([\d]+)\s")
+36759 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+37468 INFO: Processing standard module hook 'hook-anyio.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+38692 INFO: Processing standard module hook 'hook-pydantic.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+39872 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+41757 INFO: Processing standard module hook 'hook-uvicorn.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+42928 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+43127 INFO: Processing standard module hook 'hook-webbrowser.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+43509 INFO: Processing module hooks (post-graph stage)...
+44755 INFO: Processing standard module hook 'hook-tzdata.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+45704 INFO: Performing binary vs. data reclassification (729 entries)
+45832 INFO: Looking for ctypes DLLs
+45873 INFO: Analyzing run-time hooks ...
+45880 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+45884 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+45887 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+45889 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+45891 INFO: Including run-time hook 'pyi_rth_pyqt6.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+45893 INFO: Processing pre-find-module-path hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+45896 INFO: Processing standard module hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyInstaller\\hooks'
+45954 INFO: Creating base_library.zip...
+45988 INFO: Looking for dynamic libraries
+47442 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyQt6\\Qt6\\bin']
+47442 INFO: Extra DLL search directories (PATH): ['C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyQt6\\Qt6\\bin']
+48594 INFO: Warnings written to C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\build\main\warn-main.txt
+48717 INFO: Graph cross-reference written to C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\build\main\xref-main.html
+48795 INFO: checking PYZ
+48861 INFO: Building because C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\ui\grid_view.py changed
+48861 INFO: Building PYZ (ZlibArchive) C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\build\main\PYZ-00.pyz
+49701 INFO: Building PYZ (ZlibArchive) C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\build\main\PYZ-00.pyz completed successfully.
+49750 INFO: checking PKG
+49781 INFO: Building because toc changed
+49781 INFO: Building PKG (CArchive) GDP-tool-phone.pkg
+64437 INFO: Building PKG (CArchive) GDP-tool-phone.pkg completed successfully.
+64461 INFO: Bootloader C:\Users\Admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+64461 INFO: checking EXE
+64496 INFO: Building because toc changed
+64496 INFO: Building EXE from EXE-00.toc
+64503 INFO: Copying bootloader EXE to C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\dist\GDP-tool-phone.exe
+64563 INFO: Copying icon to EXE
+64618 INFO: Copying 0 resources to EXE
+64618 INFO: Embedding manifest in EXE
+64672 INFO: Appending PKG archive to EXE
+64813 INFO: Fixing EXE headers
+65356 INFO: Building EXE from EXE-00.toc completed successfully.
+65377 INFO: Build complete! The results are available in: C:\Users\Admin\.gemini\antigravity\scratch\android_phone_farm\dist
+
+Exit code: 0

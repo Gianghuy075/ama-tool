@@ -1,0 +1,32 @@
+# ============================================================================
+# android_phone_farm — "CÁNH TAY" (GUI điều khiển điện thoại + REST API :5000)
+# Cài đặt:  pip install -r requirements.txt
+# ⚠️ CHỈ CHẠY ĐƯỢC TRÊN WINDOWS (dùng Win32 API trong utils/helpers.py để nhúng cửa sổ scrcpy).
+# Chạy: python main.py
+# ----------------------------------------------------------------------------
+# ⚠️ NGOÀI thư viện Python, BẮT BUỘC có 2 BINARY (cài riêng, KHÔNG qua pip):
+#     • adb (Android platform-tools)
+#     • scrcpy
+#   → khai đường dẫn trong android_phone_farm/config.json (scrcpy_path, adb_path),
+#     hoặc thêm vào PATH rồi để giá trị "adb"/"scrcpy".
+#
+# ⚠️ ĐỂ KHÓA ĐÚNG VERSION: trên Windows đang chạy tốt, `pip freeze > requirements.lock.txt`.
+# ============================================================================
+
+# --- Giao diện & điều khiển ---
+PyQt6             # GUI desktop
+pyqtdarktheme==2.1.0; python_version < "3.12"  # import qdarktheme; Python 3.12+ dùng Qt theme mặc định
+pure-python-adb   # tên package PyPI; code import ppadb
+requests          # gọi API xoay IP ngoài (main_window)
+
+# --- REST API server (:5000) cho "bộ não" gọi vào ---
+fastapi
+uvicorn
+pydantic          # (thường đi kèm fastapi; liệt kê cho chắc)
+
+# --- Tính năng "🚀 Tạo tài khoản" trên GUI gọi sang RegisterBot_Package nên cần thêm: ---
+pandas            # đọc accounts.xlsx / ghi results.xlsx
+openpyxl          # xuất Excel
+# (gmail_otp dùng imaplib/email là stdlib — không cần cài)
+
+# --- stdlib có sẵn: sqlite3, concurrent.futures, ctypes, socket, subprocess... ---

@@ -1,0 +1,24 @@
+# ============================================================================
+# RegisterBot_Package — "BỘ NÃO" (logic đăng ký Amazon JP)
+# Cài đặt:  pip install -r requirements.txt
+# Đa nền tảng (Windows/Mac/Linux). Chạy: python main.py
+# ----------------------------------------------------------------------------
+# ⚠️ ĐỂ KHÓA ĐÚNG VERSION ĐANG CHẠY TỐT: trên máy Windows Production đang ổn,
+#    chạy `pip freeze > requirements.lock.txt` rồi dùng file đó để cài lại cho khớp tuyệt đối.
+#    File này chỉ liệt kê GÓI CẦN THIẾT (chưa ghim version cứng để tránh lệch wheel theo Python).
+# ============================================================================
+
+# --- Bắt buộc (mọi chế độ) ---
+pandas            # đọc/ghi Excel (excel_handler, web_server, main)
+openpyxl          # xuất Excel có định dạng màu (results.xlsx, registered_accounts.xlsx)
+httpx             # gọi REST API phone farm :5000 (xiaowei_client, phone_bot) + kiểm tra IP
+flask             # giao diện web điều khiển :8000 (web_server.py)
+
+# --- Chỉ cần cho chế độ BROWSER (Playwright trên PC), KHÔNG cần cho PHONE mode ---
+playwright        # sau khi cài: python -m playwright install chromium
+
+# --- Thư viện chuẩn (stdlib) đã có sẵn, KHÔNG cần cài ---
+#   imaplib, email  -> đọc OTP Gmail (gmail_otp.py)
+#   sqlite3         -> CSDL registered_accounts.db (db_handler.py)
+#   asyncio, json, os, sys, re, string, random, datetime, pathlib, urllib,
+#   logging, threading, webbrowser, ssl, socket, collections

@@ -1,0 +1,38 @@
+{
+    "base_url": "http://localhost:8000",
+    "product_url": "https://www.amazon.co.jp/dp/B0GXCRBL5J",
+    "max_concurrent_tasks": 3,
+    "headless": true,
+    "gmail_address": "pokemontt0008@gmail.com",
+    "gmail_app_password": "xbga ffyf gzwe lntb",
+    "imap_server": "imap.gmail.com",
+    "otp_wait_seconds": 90,
+    "delay_between_accounts": 3,
+    "proxy": {
+        "enable": false,
+        "server": "http://127.0.0.1:1080",
+        "change_ip_url": "",
+        "change_ip_delay": 15,
+        "verify_ip": false
+    },
+    "selectors": {
+        "name": "input[name=\"name\"], input[name=\"full_name\"], input#name",
+        "email": "input[name=\"email\"], input[type=\"email\"]",
+        "password": "input[name=\"password\"], input[type=\"password\"]",
+        "submit": "button[type=\"submit\"], input[type=\"submit\"]",
+        "otp": "input[name=\"otp\"], input[name=\"code\"], input.otp-input, input[maxlength=\"6\"]",
+        "otp_submit": "button[type=\"submit\"], input[type=\"submit\"]"
+    },
+    "xiaowei": {
+        "enable": true,
+        "api_type": "phone_farm",
+        "api_url": "http://127.0.0.1:5000",
+        "devices": "R58M30WAT1F",
+        "otp_source": "gmail",
+        "screenshot_dir": "data/screenshots",
+        "tap_delay": [
+            0.5,
+            1.5
+        ]
+    }
+}

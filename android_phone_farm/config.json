@@ -1,0 +1,11 @@
+{
+    "scrcpy_path": "C:\\Users\\Admin\\Downloads\\BoxPhone\\scrcpy-win64-v4.0\\scrcpy.exe",
+    "adb_path": "C:\\Users\\Admin\\Downloads\\BoxPhone\\platform-tools\\adb.exe",
+    "bitrate": "300K",
+    "max_fps": 5,
+    "max_size": 320,
+    "show_touches": false,
+    "stay_awake": true,
+    "turn_screen_off": false,
+    "card_width": 350
+}
