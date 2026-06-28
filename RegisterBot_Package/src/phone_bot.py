@@ -4,6 +4,7 @@ Sử dụng XiaoWei API để điều khiển Chrome trên điện thoại thậ
 """
 
 import asyncio
+import os
 import random
 import logging
 import re
@@ -12,6 +13,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
+from src.screen_reader import ScreenReader
 from src.xiaowei_client import XiaoWeiClient
 from src.config import CONFIG
 
@@ -32,6 +34,7 @@ class PhoneRegistrationBot:
         self.device = device_serial
         self.product_url = product_url or CONFIG.get("product_url", "")
         self.should_stop = False
+        self.screen_reader = ScreenReader(xiaowei)
 
         # Cấu hình timing
         xw_config = CONFIG.get("xiaowei", {})
@@ -172,6 +175,39 @@ class PhoneRegistrationBot:
         """Đợi trang load."""
         await asyncio.sleep(seconds)
 
+    async def _screenshot_step(self, step_name: str):
+        """
+        Chụp màn hình tại một bước quan trọng và lưu vào thư mục screenshots/<device>/.
+        Tên file: HHMMSS_<step_name>.png — dễ sort theo thời gian.
+        Không raise exception nếu screenshot thất bại.
+        """
+        try:
+            screenshot_dir = CONFIG.get("xiaowei", {}).get("screenshot_dir", "data/screenshots")
+            device_dir = os.path.join(screenshot_dir, self.device)
+            os.makedirs(device_dir, exist_ok=True)
+            ts = datetime.now().strftime("%H%M%S")
+            safe_name = step_name.replace(" ", "_").replace("/", "-")
+            path = os.path.join(device_dir, f"{ts}_{safe_name}.png")
+            await self.xw.screenshot(self.device, path)
+            log.debug(f"[Phone:{self.device}] Screenshot → {path}")
+        except Exception as e:
+            log.warning(f"[Phone:{self.device}] Screenshot thất bại ({step_name}): {e}")
+
+    async def _wait_for_state(self, expected_texts: list, timeout: float = 10.0, step_name: str = "") -> Optional[str]:
+        """
+        Đợi đến khi UI hiển thị bất kỳ text nào trong expected_texts.
+        Non-blocking: nếu timeout thì chỉ log warning + chụp screenshot, bot KHÔNG dừng.
+        Return: XML string nếu tìm thấy, None nếu timeout.
+        """
+        xml = await self.screen_reader.wait_for_text(
+            self.device, expected_texts, timeout=timeout
+        )
+        if xml is None:
+            label = step_name or str(expected_texts)
+            log.warning(f"[Phone:{self.device}] State timeout — không thấy {expected_texts} sau {timeout}s ({label})")
+            await self._screenshot_step(f"TIMEOUT_{label[:30]}")
+        return xml
+
     async def _press_enter(self):
         """Nhấn phím Enter."""
         await self.xw.press_enter(self.device)  # KEYCODE_ENTER via /api/keyevent
@@ -235,6 +271,81 @@ class PhoneRegistrationBot:
 
         # Gõ chậm
         await self._human_type_char_by_char(text, description)
+
+    async def _tap_element(self, search_texts: list, fallback_bbox: tuple, description: str = "") -> bool:
+        """
+        Issue #3: Tap element bằng cách tìm text thực từ uiautomator dump.
+        Fallback về hardcoded bbox nếu không tìm thấy element.
+
+        Args:
+            search_texts: list text để tìm (OR logic)
+            fallback_bbox: (x_min, x_max, y_min, y_max) tính theo %
+            description: mô tả để log
+        Return: True nếu tap bằng dynamic coord, False nếu dùng fallback.
+        """
+        # Thinking delay (giả lập người nhìn vào màn hình trước khi bấm)
+        thinking = random.uniform(1.5, 3.0)
+        log.info(f"[Phone:{self.device}] 💭 Thinking {thinking:.2f}s trước {description or 'tap'}...")
+        await asyncio.sleep(thinking)
+
+        # Thử tìm element trong UI tree
+        xml = await self.screen_reader.dump_ui(self.device)
+        if xml:
+            elem = self.screen_reader.find_any_element(xml, search_texts)
+            if elem:
+                log.info(f"[Phone:{self.device}] Dynamic tap '{description}' tại ({elem['cx']},{elem['cy']})")
+                await self.xw.device_click(self.device, elem["cx"], elem["cy"])
+                await self._delay()
+                return True
+
+        # Fallback: dùng bbox hardcoded
+        x_min, x_max, y_min, y_max = fallback_bbox
+        log.info(f"[Phone:{self.device}] Fallback bbox tap '{description}' ({x_min}-{x_max}%, {y_min}-{y_max}%)")
+        await self._tap_bbox_pct(x_min, x_max, y_min, y_max, description)
+        return False
+
+    async def _type_and_verify(
+        self,
+        text: str,
+        x_min_pct: float, x_max_pct: float, y_min_pct: float, y_max_pct: float,
+        description: str = "",
+        is_password: bool = False,
+        max_retry: int = 2,
+    ) -> bool:
+        """
+        Issue #5: Gõ text vào field rồi verify nội dung qua uiautomator dump.
+        Skip verify cho password field (uiautomator không đọc được password).
+
+        Return: True nếu verify thành công (hoặc is_password=True), False nếu mismatch.
+        """
+        for attempt in range(max_retry):
+            await self._type_into_field_human(text, x_min_pct, x_max_pct, y_min_pct, y_max_pct, description)
+
+            if is_password:
+                # Không verify được password field
+                return True
+
+            # Đọc lại nội dung field để so sánh
+            await asyncio.sleep(0.5)
+            xml = await self.screen_reader.dump_ui(self.device)
+            if xml:
+                current = self.screen_reader.get_focused_field_text(xml)
+                if current is not None and text.lower() in current.lower():
+                    log.info(f"[Phone:{self.device}] Verify '{description}' OK: '{current[:30]}'")
+                    return True
+                elif current is not None:
+                    log.warning(f"[Phone:{self.device}] Verify '{description}' MISMATCH: expected '{text[:20]}' got '{current[:20]}' — retry {attempt+1}/{max_retry}")
+                    await self._screenshot_step(f"verify_fail_{description[:20]}")
+                    continue
+                else:
+                    log.warning(f"[Phone:{self.device}] Verify '{description}': không đọc được field text, skip verify")
+                    return True
+            else:
+                log.warning(f"[Phone:{self.device}] dump_ui thất bại khi verify '{description}'")
+                return True  # Không block nếu uiautomator fail
+
+        log.error(f"[Phone:{self.device}] _type_and_verify '{description}' thất bại sau {max_retry} lần")
+        return False
 
     # ── Main Registration Flow ────────────────────────────────────────
 
@@ -316,9 +427,13 @@ class PhoneRegistrationBot:
             unique_url = self._randomize_product_url(self.product_url)
             log.info(f"[Phone:{self.device}] Mở trình duyệt {chosen_browser} → {unique_url[:60]}...")
             await self.xw.open_url(self.device, unique_url, chosen_browser)
-            
-            # Đợi trang tải xong + Độ trễ suy nghĩ (Thinking Time)
-            await self._wait_page_load(5.0)
+
+            # Đợi trang sản phẩm load (có text "招待" hoặc "Request Invitation")
+            await self._wait_for_state(
+                ["招待をリクエスト", "Request Invitation", "Invitation"],
+                timeout=10.0, step_name="step1_wait_product_page"
+            )
+            await self._screenshot_step("step1_product_page")
 
             # ── STEP 2: Click nút Request Invitation ──────────────────
             if self.should_stop:
@@ -331,7 +446,13 @@ class PhoneRegistrationBot:
 
             # Click Lệch Tâm Ngẫu Nhiên: Bounding Box (45%-55%, 53%-57%)
             await self._tap_bbox_pct(45, 55, 53, 57, "Nút Request Invitation")
-            await self._wait_page_load(4.0)
+
+            # Đợi form login xuất hiện (email field)
+            await self._wait_for_state(
+                ["メールアドレス", "Email", "sign in", "サインイン"],
+                timeout=8.0, step_name="step2_wait_login_form"
+            )
+            await self._screenshot_step("step2_after_request_invitation")
 
             # ── STEP 3: Form Login – Nhập Email ──────────────────────
             if self.should_stop:
@@ -339,12 +460,19 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] Step 3 – Nhập email vào form đăng nhập...")
+            await self._screenshot_step("step3a_login_form")
             # Nhập Email chậm phím từng ký tự (0.07s - 0.22s) với click lệch tâm ô Email (40%-60%, 38%-42%)
             await self._type_into_field_human(row["email"], 40, 60, 38, 42, "Ô Email")
 
             # Click Lệch Tâm Ngẫu Nhiên nút Continue (45%-55%, 53%-57%)
             await self._tap_bbox_pct(45, 55, 53, 57, "Nút Continue")
-            await self._wait_page_load(4.0)
+
+            # Đợi màn hình tiếp theo (Create Account hoặc password form)
+            await self._wait_for_state(
+                ["アカウントを作成", "Create account", "パスワード", "Password"],
+                timeout=8.0, step_name="step3_wait_after_continue"
+            )
+            await self._screenshot_step("step3b_after_continue")
 
             # ── STEP 4: Tạo tài khoản ──────────────────────────
             if self.should_stop:
@@ -354,7 +482,13 @@ class PhoneRegistrationBot:
             log.info(f"[Phone:{self.device}] Step 4 – Click tạo tài khoản mới...")
             # Click Lệch Tâm Ngẫu Nhiên nút Create Account (40%-60%, 48%-52%)
             await self._tap_bbox_pct(40, 60, 48, 52, "Nút Create Account")
-            await self._wait_page_load(3.0)
+
+            # Đợi form đăng ký (có ô Tên)
+            await self._wait_for_state(
+                ["お名前", "氏名", "名前", "Your name", "First name"],
+                timeout=8.0, step_name="step4_wait_register_form"
+            )
+            await self._screenshot_step("step4_create_account_form")
 
             # ── STEP 5: Điền form đăng ký ─────────────────────────────
             if self.should_stop:
@@ -373,6 +507,7 @@ class PhoneRegistrationBot:
             # Điền Xác nhận mật khẩu: Bounding Box (40%-60%, 56%-60%)
             await self._type_into_field_human(row["password"], 40, 60, 56, 60, "Ô Xác nhận mật khẩu")
             await self._delay(0.5, 1.0)
+            await self._screenshot_step("step5_form_filled")
 
             # ── STEP 6: Submit form ───────────────────────────────────
             if self.should_stop:
@@ -387,7 +522,13 @@ class PhoneRegistrationBot:
             # Lưu thời điểm điện thoại bấm nút "Gửi OTP" để lọc email (Layer 2)
             sent_otp_time = time.time()
             await self._tap_bbox_pct(40, 60, 68, 72, "Nút Submit đăng ký")
-            await self._wait_page_load(5.0)
+
+            # Đợi màn hình OTP xuất hiện
+            await self._wait_for_state(
+                ["認証コード", "verification code", "OTP", "コードを入力", "メール"],
+                timeout=10.0, step_name="step6_wait_otp_screen"
+            )
+            await self._screenshot_step("step6_after_submit")
 
             # ── STEP 7: Nhập OTP ──────────────────────────────────────
             if self.should_stop:
@@ -421,23 +562,33 @@ class PhoneRegistrationBot:
                 )
 
             if not otp:
+                await self._screenshot_step("step7_FAILED_no_otp")
                 result["note"] = f"Không nhận được OTP (nguồn: {self.otp_source})"
                 return result
 
             log.info(f"[Phone:{self.device}] OTP nhận được: {otp}")
+            await self._screenshot_step("step7a_otp_form")
 
-            # Điền OTP: Bounding Box (30%-70%, 40%-44%), gõ chậm từng ký tự
-            await self._type_into_field_human(otp, 30, 70, 40, 44, "Ô OTP")
+            # Điền OTP + verify
+            await self._type_and_verify(otp, 30, 70, 40, 44, "Ô OTP", is_password=False)
+            await self._screenshot_step("step7b_otp_typed")
 
-            # Click Lệch Tâm Ngẫu Nhiên nút Xác minh OTP (40%-60%, 58%-62%)
-            await self._tap_bbox_pct(40, 60, 58, 62, "Nút Xác minh OTP")
-            await self._wait_page_load(5.0)
+            # Dynamic tap nút Xác minh OTP (fallback: 40%-60%, 58%-62%)
+            await self._tap_element(
+                ["確認", "Verify", "Submit", "Continue", "次へ"],
+                fallback_bbox=(40, 60, 58, 62),
+                description="Nút Xác minh OTP",
+            )
+
+            # Đợi màn hình thành công (trang sản phẩm hoặc confirmation)
+            await self._wait_for_state(
+                ["ありがとう", "Thank you", "完了", "Complete", "確認", "アカウント"],
+                timeout=12.0, step_name="step7c_wait_success"
+            )
 
             # ── STEP 8: Kiểm tra kết quả ─────────────────────────────
             log.info(f"[Phone:{self.device}] Step 8 – Kiểm tra kết quả đăng ký...")
-            screenshot_dir = CONFIG.get("xiaowei", {}).get("screenshot_dir", "data/screenshots")
-            os.makedirs(screenshot_dir, exist_ok=True)
-            await self.xw.screenshot(self.device, screenshot_dir)
+            await self._screenshot_step("step8_final_result")
 
             result["status"] = "SUCCESS"
             result["note"] = "Đăng ký Amazon thành công (trên điện thoại)"
@@ -498,11 +649,12 @@ class PhoneRegistrationBot:
 
             # Mở trình duyệt
             await self.xw.open_app(self.device, chosen_browser)
-            
+
             # Chờ ứng dụng tải xong
             wait_app = random.uniform(3.0, 4.5)
             log.info(f"[Phone:{self.device}] Chờ app tải xong: {wait_app:.2f}s")
             await asyncio.sleep(wait_app)
+            await self._screenshot_step("step1_browser_opened")
 
             # ── STEP 2: Điều hướng đến Website ─────────────────────
             if self.should_stop:
@@ -513,14 +665,19 @@ class PhoneRegistrationBot:
             target_url = self.product_url or CONFIG.get("xiaowei", {}).get("default_experiment_url", "https://example.com/register")
             unique_url = self._randomize_product_url(target_url)
             url_to_type = f"{unique_url}\n"
-            
+
             log.info(f"[Phone:{self.device}] Gõ URL: {unique_url}")
             await self._human_type_char_by_char(url_to_type, "URL")
-                
-            # Chờ tải trang + Độ trễ suy nghĩ (Thinking Time)
-            wait_load = random.uniform(4.0, 5.5)
-            log.info(f"[Phone:{self.device}] Chờ tải trang: {wait_load:.2f}s")
-            await asyncio.sleep(wait_load)
+
+            # Đợi trang load — chờ text "アカウントを作成" (Create Account) xuất hiện
+            # Fallback: sleep cứng 5s nếu uiautomator không thấy text
+            page_xml = await self._wait_for_state(
+                ["アカウントを作成", "Create account", "Register", "招待"],
+                timeout=10.0, step_name="step2_wait_page"
+            )
+            if not page_xml:
+                await asyncio.sleep(random.uniform(3.0, 4.5))
+            await self._screenshot_step("step2_page_loaded")
 
             # ── STEP 3: Click tạo tài khoản & nhập Email ───────────────
             if self.should_stop:
@@ -528,20 +685,44 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] (No Proxy) Step 3 – Click Create Account & Nhập Email...")
-            
-            # Click Lệch Tâm Ngẫu Nhiên: Bounding Box (400-600, 1100-1200) -> X: 37%-55%, Y: 57%-62%
-            await self._tap_bbox_pct(37, 55, 57, 62, "Nút Create Account")
-            await asyncio.sleep(2.0)
 
-            # Nhập Email chậm phím từng ký tự: click focus ô Email (40%-60%, 38%-42%)
-            await self._type_into_field_human(row["email"], 40, 60, 38, 42, "Ô Email")
+            # Dynamic tap Create Account (fallback: 37%-55%, 57%-62%)
+            await self._tap_element(
+                ["アカウントを作成", "Create account", "新規登録"],
+                fallback_bbox=(37, 55, 57, 62),
+                description="Nút Create Account",
+            )
+
+            # Đợi form email xuất hiện
+            email_form_xml = await self._wait_for_state(
+                ["メールアドレス", "Email address", "メール"],
+                timeout=8.0, step_name="step3a_wait_email_form"
+            )
+            if not email_form_xml:
+                await asyncio.sleep(2.0)
+            await self._screenshot_step("step3a_after_create_account")
+
+            # Nhập Email + verify
+            await self._type_and_verify(row["email"], 40, 60, 38, 42, "Ô Email", is_password=False)
             await asyncio.sleep(1.0)
-            
-            # Click Lệch Tâm Ngẫu Nhiên nút Verify Email (Gửi OTP): Bounding Box (480-520, 1330-1370) -> X: 44%-48%, Y: 69%-71%
-            # Lưu thời điểm điện thoại bấm nút "Gửi OTP" để lọc email (Layer 2)
+            await self._screenshot_step("step3b_email_typed")
+
+            # Dynamic tap Verify Email (fallback: 44%-48%, 69%-71%)
             sent_otp_time = time.time()
-            await self._tap_bbox_pct(44, 48, 69, 71, "Nút Verify Email (Gửi OTP)")
-            await asyncio.sleep(3.0)
+            await self._tap_element(
+                ["メールアドレスを確認", "Verify email", "メールを確認", "Continue"],
+                fallback_bbox=(44, 48, 69, 71),
+                description="Nút Verify Email (Gửi OTP)",
+            )
+
+            # Đợi màn hình OTP (có text "認証コード" hoặc "verification code")
+            otp_screen_xml = await self._wait_for_state(
+                ["認証コード", "verification code", "OTP", "コードを入力"],
+                timeout=10.0, step_name="step3c_wait_otp_screen"
+            )
+            if not otp_screen_xml:
+                await asyncio.sleep(3.0)
+            await self._screenshot_step("step3c_after_verify_email")
 
             # ── STEP 4: Chờ và Quét OTP từ Mail Master ─────────────
             if self.should_stop:
@@ -555,7 +736,7 @@ class PhoneRegistrationBot:
                 password=CONFIG["gmail_app_password"],
                 imap_server=CONFIG["imap_server"],
             )
-            
+
             otp = await asyncio.to_thread(
                 gmail.fetch_otp,
                 row["email"],
@@ -565,6 +746,7 @@ class PhoneRegistrationBot:
             )
 
             if not otp:
+                await self._screenshot_step("step4_FAILED_no_otp")
                 result["note"] = "Không nhận được OTP từ Gmail"
                 return result
 
@@ -576,28 +758,32 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] (No Proxy) Step 5 – Độ trễ suy nghĩ & nhập OTP...")
-            
+            await self._screenshot_step("step5a_otp_form")
+
             # Độ trễ suy nghĩ (Thinking Time): dừng từ 1.5 đến 3.0 giây
             thinking = random.uniform(1.5, 3.0)
             log.info(f"[Phone:{self.device}] Dừng suy nghĩ: {thinking:.2f}s")
             await asyncio.sleep(thinking)
 
-            # Gõ chậm từng số vào ô nhập liệu: click focus ô OTP (30%-70%, 40%-44%)
-            await self._type_into_field_human(otp, 30, 70, 40, 44, "Ô OTP")
+            # Nhập OTP + verify (OTP là số → có thể check được)
+            await self._type_and_verify(otp, 30, 70, 40, 44, "Ô OTP", is_password=False)
 
             # Đợi tiếp 1.0 đến 1.8 giây sau khi gõ xong số cuối cùng
             post_typing = random.uniform(1.0, 1.8)
             log.info(f"[Phone:{self.device}] Chờ sau gõ: {post_typing:.2f}s")
             await asyncio.sleep(post_typing)
+            await self._screenshot_step("step5b_otp_typed")
 
-            # Click Lệch Tâm Ngẫu Nhiên nút Xác nhận cuối cùng: Bounding Box (480-520, 1480-1520) -> X: 44%-48%, Y: 77%-79%
-            await self._tap_bbox_pct(44, 48, 77, 79, "Nút Xác nhận tài khoản cuối")
+            # Dynamic tap nút Xác nhận cuối (fallback: 44%-48%, 77%-79%)
+            await self._tap_element(
+                ["アカウントを作成", "Create account", "確認", "Confirm", "Continue"],
+                fallback_bbox=(44, 48, 77, 79),
+                description="Nút Xác nhận tài khoản cuối",
+            )
 
-            # Chờ trang hoàn tất tải và chụp màn hình
+            # Chờ trang hoàn tất tải và chụp màn hình kết quả
             await asyncio.sleep(5.0)
-            screenshot_dir = CONFIG.get("xiaowei", {}).get("screenshot_dir", "data/screenshots")
-            os.makedirs(screenshot_dir, exist_ok=True)
-            await self.xw.screenshot(self.device, screenshot_dir)
+            await self._screenshot_step("step5c_final_result")
 
             result["status"] = "SUCCESS"
             result["note"] = "Đăng ký thử nghiệm (Không Proxy) thành công"
