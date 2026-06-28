@@ -87,20 +87,43 @@ class XiaoWeiClient:
     # ── Core HTTP helpers ─────────────────────────────────────────────
 
     async def _post(self, endpoint: str, payload: dict) -> dict:
-        """Gửi POST request tới Phone Farm API."""
+        """
+        Gửi POST request tới Phone Farm API với retry 3 lần (100/300/600ms backoff).
+        Retry khi: network error, timeout, HTTP 5xx.
+        Không retry khi: HTTP 4xx (lỗi client, retry vô ích).
+        """
         url = f"{self.api_url}{endpoint}"
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(url, json=payload)
-                result = resp.json()
-                log.debug(f"[PhoneFarm] POST {endpoint} → {resp.status_code} {result}")
-                return result
-        except httpx.ConnectError as e:
-            log.error(f"[PhoneFarm] Không thể kết nối tới {url}: {e}")
-            return {"status": "error", "message": f"Connection error: {e}"}
-        except Exception as e:
-            log.error(f"[PhoneFarm] Lỗi API {endpoint}: {e}")
-            return {"status": "error", "message": str(e)}
+        delay_ms = [100, 300, 600]
+        last_error = None
+
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    resp = await client.post(url, json=payload)
+                    if resp.status_code >= 500:
+                        # Server error — đáng retry
+                        raise httpx.HTTPStatusError(
+                            f"HTTP {resp.status_code}",
+                            request=resp.request,
+                            response=resp,
+                        )
+                    result = resp.json()
+                    if attempt > 0:
+                        log.info(f"[PhoneFarm] POST {endpoint} thành công sau {attempt + 1} lần thử")
+                    log.debug(f"[PhoneFarm] POST {endpoint} → {resp.status_code} {result}")
+                    return result
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+                last_error = e
+                if attempt < 2:
+                    wait = delay_ms[attempt] / 1000.0
+                    log.warning(f"[PhoneFarm] POST {endpoint} lần {attempt + 1} thất bại ({e}), retry sau {delay_ms[attempt]}ms")
+                    await asyncio.sleep(wait)
+            except Exception as e:
+                log.error(f"[PhoneFarm] Lỗi API {endpoint}: {e}")
+                return {"status": "error", "message": str(e)}
+
+        log.error(f"[PhoneFarm] POST {endpoint} thất bại sau 3 lần thử: {last_error}")
+        return {"status": "error", "message": f"Max retries exceeded: {last_error}"}
 
     async def _get(self, endpoint: str, params: dict = None) -> any:
         """Gửi GET request tới Phone Farm API."""
