@@ -781,8 +781,28 @@ class PhoneRegistrationBot:
         Chỉ nhắm đúng CTA vàng `招待をリクエストする` trên product page.
         Tránh click nhầm vào link/info block có text gần giống.
         """
+        return await self._tap_request_invitation_cta_from_xml(None)
+
+    def _has_valid_node_geometry(self, node: dict, min_width: int = 40, min_height: int = 20) -> bool:
+        return (
+            node.get("x2", 0) > node.get("x1", 0)
+            and node.get("y2", 0) > node.get("y1", 0)
+            and node.get("width", 0) >= min_width
+            and node.get("height", 0) >= min_height
+            and node.get("cx", 0) > 0
+            and node.get("cy", 0) > 0
+        )
+
+    async def _tap_request_invitation_cta_from_xml(self, initial_xml: Optional[str]) -> tuple[bool, str]:
+        """
+        Ưu tiên tận dụng đúng viewport XML vừa verify được ở product page.
+        Nếu tại chính viewport đó đã thấy text CTA thì không được cuộn mù ngay.
+        """
         for attempt in range(4):
-            xml = await self.screen_reader.dump_ui(self.device)
+            xml = initial_xml if attempt == 0 and initial_xml else await self.screen_reader.dump_ui(self.device)
+            if not xml:
+                continue
+
             elem = self._find_request_invitation_candidate(xml or "")
             if elem:
                 log.info(
@@ -793,6 +813,31 @@ class PhoneRegistrationBot:
                 await self.xw.device_click(self.device, elem["cx"], elem["cy"])
                 await self._delay()
                 return True, "text_candidate"
+
+            relaxed = self.screen_reader.find_best_element(
+                xml,
+                texts=["招待をリクエストする", "招待をリクエスト", "Request Invitation", "Request invite"],
+                clickable=None,
+                enabled=True,
+                partial=True,
+                preferred_region=(12, 88, 45, 88),
+            )
+            if relaxed and self._has_valid_node_geometry(relaxed):
+                screen_w = max(1, max(node["x2"] for node in self.screen_reader._parse_nodes(xml)))
+                screen_h = max(1, max(node["y2"] for node in self.screen_reader._parse_nodes(xml)))
+                x_pct = (relaxed["cx"] / screen_w) * 100.0
+                y_pct = (relaxed["cy"] / screen_h) * 100.0
+                width_pct = (relaxed["width"] / screen_w) * 100.0
+                text_preview = (relaxed.get("text") or relaxed.get("content_desc") or "")[:40]
+                if 10.0 <= x_pct <= 90.0 and 42.0 <= y_pct <= 92.0 and width_pct >= 20.0:
+                    log.warning(
+                        f"[Phone:{self.device}] Relaxed CTA text hit tại ({relaxed['cx']},{relaxed['cy']}) "
+                        f"score={relaxed.get('score')} y_pct={y_pct:.2f} width_pct={width_pct:.2f} "
+                        f"text='{text_preview}'"
+                    )
+                    await self.xw.device_click(self.device, relaxed["cx"], relaxed["cy"])
+                    await self._delay()
+                    return True, "relaxed_text_hit"
 
             anchor = self._find_invitation_anchor(xml or "")
             if anchor:
@@ -853,12 +898,17 @@ class PhoneRegistrationBot:
         anchor_texts = [
             "招待された方のみご購入いただけます",
             "本商品は招待販売としており",
+            "available by invitation",
+            "high-demand item with limited quantities",
+            "we won't be able to grant all requests",
+            "we won’t be able to grant all requests",
         ]
         for node in nodes:
             visible_text = ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
             if not visible_text:
                 continue
-            if not any(anchor_text in visible_text for anchor_text in anchor_texts):
+            visible_text_lower = visible_text.lower()
+            if not any(anchor_text in visible_text_lower for anchor_text in anchor_texts):
                 continue
 
             y_pct = (node["cy"] / max(1, screen_h)) * 100.0
@@ -960,7 +1010,7 @@ class PhoneRegistrationBot:
 
         screen_w = max(node["x2"] for node in nodes)
         screen_h = max(node["y2"] for node in nodes)
-        targets = ["招待をリクエストする", "招待をリクエスト", "Request Invitation"]
+        targets = ["招待をリクエストする", "招待をリクエスト", "Request Invitation", "Request invite"]
         button_like_classes = {
             "android.widget.button",
             "android.widget.textview",
@@ -968,11 +1018,18 @@ class PhoneRegistrationBot:
         }
 
         candidates = []
+        rejected = []
         for node in nodes:
             primary_text = (node.get("text") or "").strip()
             secondary_text = (node.get("content_desc") or "").strip()
             visible_text = primary_text or secondary_text
             if not visible_text:
+                continue
+            if not self._has_valid_node_geometry(node):
+                if any(target.lower() in visible_text.lower() for target in targets):
+                    rejected.append(
+                        f"text='{visible_text[:24]}' bounds={node.get('raw_bounds')} size=({node.get('width')},{node.get('height')})"
+                    )
                 continue
 
             visible_text_lower = visible_text.lower()
@@ -999,6 +1056,8 @@ class PhoneRegistrationBot:
                 score += 110.0
             elif visible_text_lower == "request invitation":
                 score += 100.0
+            elif visible_text_lower == "request invite":
+                score += 100.0
             else:
                 score += 75.0
 
@@ -1009,9 +1068,9 @@ class PhoneRegistrationBot:
             if node["class"].lower() in button_like_classes:
                 score += 12.0
 
-            if 55.0 <= y_pct <= 80.0:
+            if 50.0 <= y_pct <= 82.0:
                 score += 35.0
-            elif 50.0 <= y_pct <= 86.0:
+            elif 42.0 <= y_pct <= 88.0:
                 score += 10.0
             else:
                 score -= 60.0
@@ -1045,6 +1104,10 @@ class PhoneRegistrationBot:
             candidates.append(candidate)
 
         if not candidates:
+            if rejected:
+                log.warning(
+                    f"[Phone:{self.device}] CTA text hit nhưng geometry bị loại: {' | '.join(rejected[:3])}"
+                )
             return None
 
         candidates.sort(key=lambda item: item["score"], reverse=True)
@@ -1148,15 +1211,15 @@ class PhoneRegistrationBot:
 
         return False, "Không xác nhận được form/account flow thật sau khi bấm CTA", xml
 
-    async def _open_request_invitation_flow(self) -> tuple[bool, str, Optional[str]]:
+    async def _open_request_invitation_flow(self, initial_xml: Optional[str] = None) -> tuple[bool, str, Optional[str]]:
         """
         Cố gắng mở sign-in/create-account flow từ CTA invitation.
         Nếu click nhầm thì back lại và thử lại chiến lược tiếp theo.
         """
         last_reason = "Không mở được request invitation flow"
         for attempt in range(3):
-            before_xml = await self.screen_reader.dump_ui(self.device)
-            tapped, tap_mode = await self._tap_request_invitation_cta()
+            before_xml = initial_xml if attempt == 0 and initial_xml else await self.screen_reader.dump_ui(self.device)
+            tapped, tap_mode = await self._tap_request_invitation_cta_from_xml(before_xml)
             if not tapped:
                 return False, "Không tìm thấy nút Request Invitation trên trang sản phẩm", before_xml
 
@@ -1354,7 +1417,7 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] Step 2 – Tìm đúng CTA vàng '招待をリクエストする' trên product page...")
-            login_ok, login_reason, login_xml = await self._open_request_invitation_flow()
+            login_ok, login_reason, login_xml = await self._open_request_invitation_flow(initial_xml=verify_xml)
             if not login_ok:
                 result["note"] = login_reason
                 await self._screenshot_step("step2_FAILED_login_form_not_found")
