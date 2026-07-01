@@ -206,6 +206,25 @@
   - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
   - pass
 
+## 2026-07-01 - Runtime fix for bogus CTA/anchor nodes with zero bounds
+
+- A later Japan-machine runtime log exposed a more concrete bug in the Step 2 CTA path:
+  - `Request invite` and `Available by invitation` were detected from XML text
+  - but the matching nodes had bounds equivalent to `0,0`
+  - the bot then used `anchor_y2=0` for fallback CTA tapping, which shifted the tap near the top of the screen
+- Another verification bug was found in the same run:
+  - post-click state classification already detected `register_form`
+  - but `_verify_post_request_invitation_state()` still returned failure because broad `info/help marker` checks overrode the classified state
+- Fix implemented in `RegisterBot_Package/src/phone_bot.py`:
+  - reject CTA candidate nodes with invalid geometry
+  - reject invitation anchor nodes with invalid geometry
+  - reject first-fold CTA probe nodes with invalid geometry
+  - log invalid geometry matches explicitly for later runtime diagnosis
+  - make post-click verification trust a classified account-flow state before applying broad negative text heuristics
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
+  - pass
+
 ## Mục tiêu
 
 Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user hoặc AI Agent.

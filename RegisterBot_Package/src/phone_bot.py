@@ -930,6 +930,8 @@ class PhoneRegistrationBot:
             visible_text = ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
             if not visible_text:
                 continue
+            if not self._has_valid_node_geometry(node, min_width=60, min_height=20):
+                continue
             visible_text_lower = visible_text.lower()
             if not any(anchor_text in visible_text_lower for anchor_text in anchor_texts):
                 continue
@@ -981,6 +983,8 @@ class PhoneRegistrationBot:
 
         for node in nodes:
             if not node["enabled"]:
+                continue
+            if not self._has_valid_node_geometry(node, min_width=80, min_height=24):
                 continue
 
             visible_text = self._node_visible_text(node)
@@ -1127,11 +1131,18 @@ class PhoneRegistrationBot:
         }
 
         candidates = []
+        invalid_geometry_hits = []
         for node in nodes:
             primary_text = (node.get("text") or "").strip()
             secondary_text = (node.get("content_desc") or "").strip()
             visible_text = primary_text or secondary_text
             if not visible_text:
+                continue
+            if not self._has_valid_node_geometry(node, min_width=40, min_height=20):
+                if self._text_matches_any(visible_text, targets, partial=True):
+                    invalid_geometry_hits.append(
+                        f"text='{visible_text[:24]}' bounds={node.get('raw_bounds')} size=({node.get('width')},{node.get('height')})"
+                    )
                 continue
 
             visible_text_lower = visible_text.lower()
@@ -1206,6 +1217,10 @@ class PhoneRegistrationBot:
             candidates.append(candidate)
 
         if not candidates:
+            if invalid_geometry_hits:
+                log.warning(
+                    f"[Phone:{self.device}] Bỏ qua CTA text match vì bounds không hợp lệ: {' | '.join(invalid_geometry_hits[:3])}"
+                )
             return None
 
         candidates.sort(key=lambda item: item["score"], reverse=True)
@@ -1219,6 +1234,16 @@ class PhoneRegistrationBot:
 
     def _node_visible_text(self, node: dict) -> str:
         return ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
+
+    def _has_valid_node_geometry(self, node: dict, min_width: int = 20, min_height: int = 20) -> bool:
+        return (
+            node.get("x2", 0) > node.get("x1", 0)
+            and node.get("y2", 0) > node.get("y1", 0)
+            and node.get("width", 0) >= min_width
+            and node.get("height", 0) >= min_height
+            and node.get("cx", 0) > 0
+            and node.get("cy", 0) > 0
+        )
 
     def _text_matches_any(self, value: str, patterns: list[str], partial: bool = True) -> bool:
         value_lower = (value or "").strip().lower()
@@ -1645,6 +1670,9 @@ class PhoneRegistrationBot:
             timeout=7.0,
             step_name="step2_wait_post_cta_state",
         )
+        if state in {"signin_entry", "create_account_prompt", "register_form", "password_login"}:
+            return True, reason, xml
+
         if xml:
             xml_lower = xml.lower()
             if any(marker in xml_lower for marker in [
@@ -1658,8 +1686,6 @@ class PhoneRegistrationBot:
             ]):
                 return False, "Sau click CTA bot đã sang trang info/help khác, không phải account flow", xml
 
-        if state in {"signin_entry", "create_account_prompt", "register_form", "password_login"}:
-            return True, reason, xml
         return False, reason, xml
 
     async def _open_request_invitation_flow(self) -> tuple[bool, str, Optional[str]]:

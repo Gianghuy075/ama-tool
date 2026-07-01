@@ -59,6 +59,8 @@ in_progress
     - không scroll preset mù
     - dùng short-sweep có overlap
     - log viewport signature để biết bot đã quét tới đâu
+    - loại bỏ node bounds `0,0`
+    - xác nhận anchor fallback không còn tap gần đầu màn hình
   - runtime verify app open/start
   - runtime verify tap/swipe/type_text
   - end-to-end 1 account

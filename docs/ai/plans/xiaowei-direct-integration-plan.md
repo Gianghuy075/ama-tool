@@ -606,6 +606,10 @@ Kết luận:
     - dùng `short-sweep` có overlap lớn để quét viewport
     - có `viewport signature` để phát hiện scroll lặp/không đổi
     - thêm `first-fold CTA probe` trước khi cho phép scroll xuống
+  - patch fix tiếp theo sau runtime log:
+    - loại bỏ hoàn toàn text/anchor node có bounds `0,0`
+    - không cho anchor fallback tính từ `anchor_y2=0`
+    - nếu post-click state đã là `signin_entry/create_account_prompt/register_form/password_login` thì verify pass ngay, không bị rule `info/help marker` phủ quyết sai
 
 #### Wave 4 - Hardening production
 
