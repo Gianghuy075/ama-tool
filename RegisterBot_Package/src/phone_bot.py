@@ -617,12 +617,13 @@ class PhoneRegistrationBot:
                 await self._delay()
                 return True
 
-            if self._invitation_section_visible(xml or ""):
+            anchor = self._find_invitation_anchor(xml or "")
+            if anchor:
                 log.warning(
-                    f"[Phone:{self.device}] CTA/invitation section đã hiện trên màn hình nhưng chưa lấy được bounds đáng tin; "
-                    "thử tap vùng CTA tại màn hình hiện tại, không scroll tiếp"
+                    f"[Phone:{self.device}] Đã thấy invitation anchor '{anchor.get('visible_text', '')[:40]}' "
+                    "nhưng chưa có bounds CTA đáng tin; fallback tap theo anchor, không scroll tiếp"
                 )
-                await self._tap_bbox_pct(12, 88, 60, 78, "Fallback vùng CTA vàng Request Invitation")
+                await self._tap_request_invitation_from_anchor(anchor)
                 return True
 
             if attempt < 3:
@@ -636,19 +637,63 @@ class PhoneRegistrationBot:
         log.error(f"[Phone:{self.device}] Không tìm được CTA vàng '招待をリクエストする' hợp lệ")
         return False
 
-    def _invitation_section_visible(self, xml: str) -> bool:
-        if not xml:
-            return False
-        xml_lower = xml.lower()
-        markers = [
-            "招待をリクエストする",
-            "招待をリクエスト",
-            "request invitation",
+    async def _tap_request_invitation_from_anchor(self, anchor: dict) -> None:
+        """
+        Fallback có kiểm soát: tap vào vùng nút vàng nằm bên dưới invitation anchor.
+        """
+        screen_w, screen_h = await self.get_device_resolution()
+        x_pct = 50.0
+        # Nút vàng thường nằm ngay dưới đoạn mô tả invitation, dùng offset vừa phải theo anchor.
+        target_y_px = min(screen_h - 80, anchor["y2"] + int(screen_h * 0.12))
+        y_pct = (target_y_px / max(1, screen_h)) * 100.0
+        log.info(
+            f"[Phone:{self.device}] Fallback anchor-based CTA tap dưới anchor tại y_pct={y_pct:.2f} "
+            f"(anchor_y2={anchor['y2']})"
+        )
+        await self._tap_bbox_pct(22, 78, max(0.0, y_pct - 3.5), min(100.0, y_pct + 3.5), "Fallback CTA theo anchor")
+
+    def _find_invitation_anchor(self, xml: str) -> Optional[dict]:
+        """
+        Tìm anchor text của khối invitation tiếng Nhật ngay phía trên nút vàng.
+        """
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return None
+        screen_h = max(node["y2"] for node in nodes)
+
+        anchors = []
+        anchor_texts = [
             "招待された方のみご購入いただけます",
-            "invitation-only",
-            "notice to customers",
+            "本商品は招待販売としており",
         ]
-        return any(marker in xml_lower for marker in markers)
+        for node in nodes:
+            visible_text = ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
+            if not visible_text:
+                continue
+            if not any(anchor_text in visible_text for anchor_text in anchor_texts):
+                continue
+
+            y_pct = (node["cy"] / max(1, screen_h)) * 100.0
+            score = 100.0
+            if 35.0 <= y_pct <= 70.0:
+                score += 25.0
+            if node["width"] >= 400:
+                score += 10.0
+            anchors.append({
+                **node,
+                "visible_text": visible_text,
+                "score": score,
+            })
+
+        if not anchors:
+            return None
+        anchors.sort(key=lambda item: item["score"], reverse=True)
+        best = anchors[0]
+        log.info(
+            f"[Phone:{self.device}] Invitation anchor: ({best['cx']},{best['cy']}) "
+            f"score={best['score']} text='{best['visible_text'][:40]}'"
+        )
+        return best
 
     def _find_request_invitation_candidate(self, xml: str) -> Optional[dict]:
         """
@@ -823,8 +868,18 @@ class PhoneRegistrationBot:
 
         if xml:
             xml_lower = xml.lower()
-            if any(marker.lower() in xml_lower for marker in expected_markers):
-                return True, "Đã chuyển sang sign-in/create-account flow", xml
+            nodes = self.screen_reader._parse_nodes(xml)
+            input_nodes = [node for node in nodes if "edittext" in node["class"].lower()]
+            has_email_marker = any(marker.lower() in xml_lower for marker in ["メールアドレス", "email", "サインイン", "sign in"])
+            has_account_create_marker = any(marker.lower() in xml_lower for marker in ["アカウントを作成", "create account"])
+            has_password_marker = any(marker.lower() in xml_lower for marker in ["パスワード", "password"])
+
+            if has_email_marker and input_nodes:
+                return True, f"Đã chuyển sang sign-in flow với {len(input_nodes)} input field(s)", xml
+            if has_account_create_marker and input_nodes:
+                return True, f"Đã chuyển sang create-account flow với {len(input_nodes)} input field(s)", xml
+            if has_password_marker and len(input_nodes) >= 2:
+                return True, f"Đã chuyển sang password/account flow với {len(input_nodes)} input field(s)", xml
 
             if any(marker in xml_lower for marker in [
                 "amazonポイント",
@@ -832,10 +887,12 @@ class PhoneRegistrationBot:
                 "ヘルプ",
                 "詳細はこちら",
                 "マイポイント",
+                "pokemon",
+                "pikachu",
             ]):
                 return False, "Sau click CTA bot đã sang trang info/help khác, không phải sign-in flow", xml
 
-        return False, "Không xác nhận được state sau khi bấm CTA", xml
+        return False, "Không xác nhận được form/account flow thật sau khi bấm CTA", xml
 
     async def _device_point_to_percent(self, x: int, y: int) -> tuple[float, float]:
         """Chuyển tọa độ pixel thật thành % màn hình để tái dùng helper hiện có."""
