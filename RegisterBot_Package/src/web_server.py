@@ -228,9 +228,16 @@ async def _build_xiaowei_diagnostics_report(api_url: str, api_type: str, request
 
     screenshot_path = os.path.join(screenshot_dir, f"{file_stamp}_{serial}_diagnostic.png")
     screenshot_ok = await client.screenshot(serial, screenshot_path)
+    screenshot_exists = False
+    if screenshot_ok:
+        for _ in range(10):
+            if os.path.exists(screenshot_path):
+                screenshot_exists = True
+                break
+            await asyncio.sleep(0.2)
     add_step(
         "screenshot",
-        screenshot_ok and os.path.exists(screenshot_path),
+        screenshot_ok and screenshot_exists,
         f"Lưu screenshot tại {screenshot_path}" if screenshot_ok else "Chụp screenshot thất bại",
         {"path": screenshot_path},
     )

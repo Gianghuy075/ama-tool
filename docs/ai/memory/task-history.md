@@ -87,6 +87,25 @@
   - failure is now at the intended backend layer: connect refused to `ws://127.0.0.1:22222/`
   - this is expected on the current Mac dev machine without XiaoWei runtime listening locally
 
+## 2026-07-01 - XiaoWei Windows JP diagnostics first pass
+
+- User checked out branch `feature/xiaowei-e2e-readiness` on the Japan Windows machine and ran:
+  - `cd RegisterBot_Package`
+  - `python main.py --diagnose-xiaowei`
+- Runtime evidence confirmed:
+  - connected to local XiaoWei runtime at `http://127.0.0.1:22222`
+  - discovered `10` devices
+  - `adb wm size` works
+  - `adb pm list packages com.android.chrome` works
+  - `uiautomator dump` works
+  - UI text probe works
+- Remaining issue found:
+  - diagnostics reported `overall_success=false` only because `screenshot` step returned success from XiaoWei but local file existence check failed immediately
+- Fix implemented in repo:
+  - `RegisterBot_Package/src/xiaowei_client.py`
+  - `RegisterBot_Package/src/web_server.py`
+  - client now prefers `screenFile` when `savePath` is provided, falls back to `screen`, and waits briefly for file materialization
+
 ## Mục tiêu
 
 Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user hoặc AI Agent.

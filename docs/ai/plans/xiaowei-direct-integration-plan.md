@@ -373,7 +373,7 @@ Checklist:
 - [ ] Rà lại các chỗ `if self.api_type == "xiaowei"` để xử lý consistency
 - [ ] Xác nhận `swipe_custom()` fallback bằng adb là ổn
 - [ ] Xác nhận `open_app(startApk)` đúng contract
-- [ ] Xác nhận `screen(savePath)` đúng contract
+- [x] Xác nhận `screen(savePath)` cần xử lý theo `screenFile` trước, fallback `screen`
 - [ ] Xác nhận `pushEvent` mapping home/back/recents đúng
 
 ## Phase 8 - Chuyển đổi kiến trúc vận hành
@@ -428,6 +428,22 @@ Checklist:
 - [x] Tạo config mẫu sạch `RegisterBot_Package/data/config.xiaowei.example.json`
 - [x] Thêm diagnostics tích hợp:
   - route `/api/xiaowei/diagnostics`
+
+### 2026-07-01
+
+- [x] Runtime diagnostics trên máy Windows Nhật:
+  - `get_devices`: pass (`10` devices)
+  - `adb_wm_size`: pass
+  - `adb_pm_list_packages`: pass
+  - `uiautomator_dump`: pass
+  - `ui_text_probe`: pass
+- [x] Xác định lỗi còn lại của diagnostics là bước screenshot:
+  - XiaoWei trả success nhưng report vẫn `overall_success=false`
+  - nguyên nhân: code cũ gọi `screen` với `savePath` rồi kiểm tra file xuất hiện ngay
+- [x] Sửa client screenshot:
+  - ưu tiên action `screenFile` khi có `savePath`
+  - fallback `screen` để chịu được vendor-doc inconsistency
+  - thêm wait ngắn để chờ file Windows được ghi ra disk
   - nút `Chẩn Đoán` trong dashboard
   - CLI `python main.py --diagnose-xiaowei`
 - [x] Truy xuất article official `234` qua endpoint `https://www.xiaowei.xin/api/manual/article?id=234`

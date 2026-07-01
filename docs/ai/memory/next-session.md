@@ -23,17 +23,15 @@
 
 ## Recommended next step
 
-1. Phase 2 is now complete in repo defaults/config.
-2. Start Phase 3 smoke test on the machine running XiaoWei:
+1. Phase 3 is partially complete with real Windows JP runtime evidence:
+   - `get_devices`, `adb`, `uiautomator dump` already passed
+2. Pull the latest fix for screenshot handling on the Japan Windows machine.
+3. Re-run:
    - `cd RegisterBot_Package`
-   - `python3 main.py --diagnose-xiaowei`
-3. If diagnostics reaches device actions:
-   - runtime-verify `adb`
-   - runtime-verify app open/start behavior
-4. Then open dashboard and test:
-   - connection
-   - device list
-   - diagnostics button
+   - `python main.py --diagnose-xiaowei`
+4. If screenshot also passes:
+   - move to app-open/runtime verification
+   - then run one full end-to-end registration account
 
 ## Bắt đầu từ đâu?
 
@@ -52,9 +50,7 @@
 ## Việc còn lại
 
 - Tiếp tục plan XiaoWei tại `docs/ai/plans/xiaowei-direct-integration-plan.md`
-- Ưu tiên lấy:
-  - password hoặc nội dung doc API XiaoWei
-  - report từ `python main.py --diagnose-xiaowei`
-- Sau khi có runtime evidence:
-  - tick tiếp `Phase 1` -> `Phase 4`
-  - xử lý lỗi thực tế từ diagnostics
+- Ưu tiên:
+  - xác nhận screenshot pass với patch `screenFile` fallback `screen`
+  - verify `startApk` / app-open runtime thật
+  - chạy 1 account end-to-end

@@ -640,15 +640,31 @@ class XiaoWeiClient:
         if self.api_type == "xiaowei":
             import os
             abs_path = os.path.abspath(save_path) if save_path else ""
-            payload = {
-                "action": "screen",
-                "devices": device,
-                "data": {
-                    "savePath": abs_path
+            if abs_path:
+                os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+
+            actions = ["screenFile", "screen"] if abs_path else ["screen"]
+            success = False
+
+            for action in actions:
+                payload = {
+                    "action": action,
+                    "devices": device,
+                    "data": {
+                        "savePath": abs_path
+                    }
                 }
-            }
-            res = await self._send_websocket(payload)
-            success = self._is_success(res)
+                res = await self._send_websocket(payload)
+                success = self._is_success(res)
+                if success:
+                    break
+
+            if success and abs_path:
+                for _ in range(10):
+                    if os.path.exists(abs_path):
+                        break
+                    await asyncio.sleep(0.2)
+
             log.info(f"[XiaoWei WS] Screenshot on {device}: {'OK' if success else 'FAIL'}")
             return success
 
