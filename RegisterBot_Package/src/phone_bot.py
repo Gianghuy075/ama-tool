@@ -793,6 +793,41 @@ class PhoneRegistrationBot:
             and node.get("cy", 0) > 0
         )
 
+    async def _scroll_cta_micro_down(self, attempt: int = 0) -> bool:
+        """
+        Micro-scroll riêng cho CTA ở product first-fold.
+        Mục tiêu là không vượt quá nút vàng ngay dưới ảnh.
+        """
+        swipe_plan = [
+            (0.50, 0.78, 0.50, 0.72, 240),
+            (0.50, 0.76, 0.50, 0.69, 260),
+            (0.50, 0.74, 0.50, 0.66, 280),
+        ]
+        x1, y1, x2, y2, duration = swipe_plan[min(attempt, len(swipe_plan) - 1)]
+        log.info(
+            f"[Phone:{self.device}] CTA micro-scroll step={attempt + 1}: "
+            f"({x1:.2f},{y1:.2f}) -> ({x2:.2f},{y2:.2f}) duration={duration}ms"
+        )
+        ok = await self.xw.swipe_custom(self.device, x1, y1, x2, y2, duration=duration)
+        await self._delay(0.4, 0.8)
+        return ok
+
+    def _has_request_invitation_text_without_geometry(self, xml: str) -> bool:
+        """
+        XML đã lộ text CTA nhưng node geometry rác/0-height.
+        Đây là tín hiệu để thử first-fold fallback trước khi scroll.
+        """
+        nodes = self.screen_reader._parse_nodes(xml)
+        targets = ["招待をリクエストする", "招待をリクエスト", "Request Invitation", "Request invite"]
+        for node in nodes:
+            visible_text = ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
+            if not visible_text:
+                continue
+            if any(target.lower() in visible_text.lower() for target in targets):
+                if not self._has_valid_node_geometry(node):
+                    return True
+        return False
+
     async def _tap_request_invitation_cta_from_xml(self, initial_xml: Optional[str]) -> tuple[bool, str]:
         """
         Ưu tiên tận dụng đúng viewport XML vừa verify được ở product page.
@@ -839,6 +874,14 @@ class PhoneRegistrationBot:
                     await self._delay()
                     return True, "relaxed_text_hit"
 
+            if attempt == 0 and self._has_request_invitation_text_without_geometry(xml):
+                log.warning(
+                    f"[Phone:{self.device}] CTA text đã xuất hiện nhưng geometry không dùng được; "
+                    "thử first-fold CTA bbox fallback trước khi scroll"
+                )
+                await self._tap_bbox_pct(18, 82, 62, 76, "First-fold CTA fallback")
+                return True, "first_fold_bbox_fallback"
+
             anchor = self._find_invitation_anchor(xml or "")
             if anchor:
                 anchor_button = self._find_cta_below_anchor(xml or "", anchor)
@@ -867,11 +910,10 @@ class PhoneRegistrationBot:
 
             if attempt < 3:
                 log.info(
-                    f"[Phone:{self.device}] Chưa tìm được CTA vàng hợp lệ, cuộn thêm 1 nhịp "
+                    f"[Phone:{self.device}] Chưa tìm được CTA vàng hợp lệ, micro-scroll thêm 1 nhịp "
                     f"(attempt {attempt + 1}/3)"
                 )
-                await self._scroll_down(1)
-                await self._delay(0.8, 1.5)
+                await self._scroll_cta_micro_down(attempt)
 
         log.error(f"[Phone:{self.device}] Không tìm được CTA vàng '招待をリクエストする' hợp lệ")
         return False, "not_found"
