@@ -304,6 +304,40 @@ class PhoneRegistrationBot:
         await self._tap_bbox_pct(x_min, x_max, y_min, y_max, description)
         return False
 
+    async def _tap_element_with_scroll_search(
+        self,
+        search_texts: list,
+        description: str = "",
+        max_scrolls: int = 3,
+    ) -> bool:
+        """
+        Tìm element theo text trên UI hiện tại, nếu chưa thấy thì cuộn từng nhịp ngắn rồi tìm lại.
+        Fail-safe: không click bbox cứng nếu chưa tìm thấy text thật, để tránh click sai flow.
+        """
+        for attempt in range(max_scrolls + 1):
+            xml = await self.screen_reader.dump_ui(self.device)
+            if xml:
+                elem = self.screen_reader.find_any_element(xml, search_texts)
+                if elem:
+                    log.info(
+                        f"[Phone:{self.device}] Tìm thấy '{description or search_texts[0]}' sau {attempt} lần cuộn tại "
+                        f"({elem['cx']},{elem['cy']})"
+                    )
+                    await self.xw.device_click(self.device, elem["cx"], elem["cy"])
+                    await self._delay()
+                    return True
+
+            if attempt < max_scrolls:
+                log.info(
+                    f"[Phone:{self.device}] Chưa thấy '{description or search_texts[0]}', cuộn thêm 1 nhịp để tìm lại "
+                    f"(attempt {attempt + 1}/{max_scrolls})"
+                )
+                await self._scroll_down(1)
+                await self._delay(0.8, 1.5)
+
+        log.error(f"[Phone:{self.device}] Không tìm thấy '{description or search_texts[0]}' sau {max_scrolls} lần cuộn")
+        return False
+
     async def _type_and_verify(
         self,
         text: str,
@@ -445,12 +479,21 @@ class PhoneRegistrationBot:
                 result["note"] = "Stopped by user"
                 return result
 
-            log.info(f"[Phone:{self.device}] Step 2 – Cuộn trang tìm nút Request Invitation...")
-            await self._scroll_down(3)
-            await self._delay(1.0, 2.0)
-
-            # Click Lệch Tâm Ngẫu Nhiên: Bounding Box (45%-55%, 53%-57%)
-            await self._tap_bbox_pct(45, 55, 53, 57, "Nút Request Invitation")
+            log.info(f"[Phone:{self.device}] Step 2 – Tìm nút Request Invitation theo UI thực...")
+            tapped_request = await self._tap_element_with_scroll_search(
+                [
+                    "招待をリクエストする",
+                    "招待をリクエスト",
+                    "Request Invitation",
+                    "Invitation",
+                ],
+                description="Nút Request Invitation",
+                max_scrolls=3,
+            )
+            if not tapped_request:
+                result["note"] = "Không tìm thấy nút Request Invitation trên trang sản phẩm"
+                await self._screenshot_step("step2_FAILED_request_invitation_not_found")
+                return result
 
             # Đợi form login xuất hiện (email field)
             await self._wait_for_state(
