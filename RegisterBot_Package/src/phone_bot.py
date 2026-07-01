@@ -815,7 +815,7 @@ class PhoneRegistrationBot:
     def _has_request_invitation_text_without_geometry(self, xml: str) -> bool:
         """
         XML đã lộ text CTA nhưng node geometry rác/0-height.
-        Đây là tín hiệu để thử first-fold fallback trước khi scroll.
+        Đây là tín hiệu để micro-scroll lộ CTA thật thay vì click mù.
         """
         nodes = self.screen_reader._parse_nodes(xml)
         targets = ["招待をリクエストする", "招待をリクエスト", "Request Invitation", "Request invite"]
@@ -877,10 +877,10 @@ class PhoneRegistrationBot:
             if attempt == 0 and self._has_request_invitation_text_without_geometry(xml):
                 log.warning(
                     f"[Phone:{self.device}] CTA text đã xuất hiện nhưng geometry không dùng được; "
-                    "thử first-fold CTA bbox fallback trước khi scroll"
+                    "bắt buộc micro-scroll 1 nhịp để lộ nút thật, không click mù ở first fold"
                 )
-                await self._tap_bbox_pct(18, 82, 62, 76, "First-fold CTA fallback")
-                return True, "first_fold_bbox_fallback"
+                await self._scroll_cta_micro_down(0)
+                continue
 
             anchor = self._find_invitation_anchor(xml or "")
             if anchor:
@@ -907,6 +907,15 @@ class PhoneRegistrationBot:
                     )
                     await self._tap_request_invitation_from_anchor(anchor)
                     return True, "anchor_fallback"
+
+            if attempt >= 1 and self._has_request_invitation_text_without_geometry(xml):
+                log.warning(
+                    f"[Phone:{self.device}] CTA text vẫn hiện kiểu geometry rác sau khi đã micro-scroll; "
+                    "thử bbox fallback ở vùng dưới block sản phẩm"
+                )
+                await self._tap_bbox_pct(18, 82, 72, 84, "Revealed CTA fallback")
+                await self._delay()
+                return True, "revealed_bbox_fallback"
 
             if attempt < 3:
                 log.info(
