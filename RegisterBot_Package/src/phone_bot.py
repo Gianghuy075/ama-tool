@@ -381,6 +381,10 @@ class PhoneRegistrationBot:
         # Nếu đang chạy thực nghiệm Không Proxy
         xw_config = CONFIG.get("xiaowei", {})
         if xw_config.get("no_proxy_experiment", False):
+            log.warning(
+                f"[Phone:{self.device}] no_proxy_experiment=True -> chuyển sang luồng thực nghiệm register_no_proxy(), "
+                "không dùng luồng mở product_url Amazon chuẩn"
+            )
             return await self.register_no_proxy(row)
 
         if not row.get("name") or not str(row["name"]).strip():
@@ -425,7 +429,8 @@ class PhoneRegistrationBot:
 
             # Randomize URL tracking tokens cho mỗi tài khoản (anti-detection)
             unique_url = self._randomize_product_url(self.product_url)
-            log.info(f"[Phone:{self.device}] Mở trình duyệt {chosen_browser} → {unique_url[:60]}...")
+            log.info(f"[Phone:{self.device}] Product URL gốc: {self.product_url}")
+            log.info(f"[Phone:{self.device}] Mở trình duyệt {chosen_browser} → {unique_url[:120]}...")
             await self.xw.open_url(self.device, unique_url, chosen_browser)
 
             # Đợi trang sản phẩm load (có text "招待" hoặc "Request Invitation")

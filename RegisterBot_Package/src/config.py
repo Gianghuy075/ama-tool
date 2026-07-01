@@ -50,7 +50,9 @@ CONFIG = {
             "typo_pause_after_backspace": 0.15,  # Dừng lại (giây) sau khi bấm Backspace, trước khi gõ lại
         },
         # ── No-Proxy Experiment Settings ──
-        "no_proxy_experiment": True,
+        # Mặc định phải tắt để bot đi theo luồng product_url Amazon chuẩn.
+        # Chỉ bật khi chủ động test nhánh thực nghiệm register_no_proxy().
+        "no_proxy_experiment": False,
         "experiment_package": "org.mozilla.firefox",
         "default_experiment_url": "https://example.com/register",
     },
