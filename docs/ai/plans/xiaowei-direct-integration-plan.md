@@ -385,6 +385,7 @@ Kết luận:
 #### S3. Chuẩn hóa state của Chrome mobile web
 
 - [x] Handle `Chrome first-run/onboarding`
+- [x] Handle `network error / reload` screen
 - [ ] Handle `Translate page` / thanh dịch của Chrome
 - [ ] Handle biến thể mobile web English/Japanese
 - [ ] Handle popup/infobar che khu vực CTA
@@ -565,6 +566,7 @@ Kết luận:
 - [ ] verify foreground package sau `open_url`
 - [ ] verify foreground package trước/sau click CTA
 - [ ] dismiss `Chrome first-run`
+- [x] detect + recover `Chrome network/reload`
 - [ ] xử lý `Translate page` infobar
 - [ ] xác nhận Chrome mobile web variant ổn định trước khi vào CTA flow
 

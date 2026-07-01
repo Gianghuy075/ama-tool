@@ -296,6 +296,94 @@ class PhoneRegistrationBot:
             return True
         return False
 
+    def _is_chrome_network_error_screen(self, xml: str) -> bool:
+        """
+        Nhận diện màn hình mất mạng / reload / retry của Chrome.
+        """
+        if not xml:
+            return False
+        xml_lower = xml.lower()
+        network_markers = [
+            "không có kết nối internet",
+            "kiểm tra kết nối internet",
+            "thử lại",
+            "tải lại",
+            "làm mới",
+            "reload",
+            "refresh",
+            "retry",
+            "no internet",
+            "check your internet connection",
+            "this site can’t be reached",
+            "this site can't be reached",
+            "err_",
+            "再読み込み",
+            "ネットワーク",
+            "接続",
+        ]
+        product_markers = [
+            "amazon.co.jp",
+            "request invite",
+            "招待をリクエスト",
+            "￥",
+            "¥",
+            "available by invitation",
+            "amazon mastercard",
+        ]
+        if any(marker in xml_lower for marker in product_markers):
+            return False
+        return any(marker in xml_lower for marker in network_markers)
+
+    async def _recover_chrome_network_error_if_needed(self, browser_package: str, target_url: str) -> bool:
+        """
+        Nếu Chrome đang hiện màn mất mạng / reload, thử bấm reload hoặc reopen URL.
+        """
+        if browser_package != "com.android.chrome":
+            return False
+
+        handled_any = False
+        reload_text_sets = [
+            ["Tải lại", "Làm mới", "Thử lại", "Reload", "Refresh", "Retry", "再読み込み"],
+            ["Thử lại", "Retry", "Try again", "もう一度"],
+        ]
+
+        for attempt in range(3):
+            xml = await self.screen_reader.dump_ui(self.device)
+            if not self._is_chrome_network_error_screen(xml or ""):
+                break
+
+            handled_any = True
+            log.warning(
+                f"[Phone:{self.device}] Phát hiện Chrome network/reload screen (attempt {attempt + 1}/3)"
+            )
+
+            tapped = False
+            for texts in reload_text_sets:
+                elem = self.screen_reader.find_best_element(
+                    xml or "",
+                    texts=texts,
+                    clickable=True,
+                    preferred_region=(20, 85, 45, 90),
+                    partial=True,
+                )
+                if elem:
+                    log.info(
+                        f"[Phone:{self.device}] Bấm reload/retry '{elem.get('text') or elem.get('content_desc')}' "
+                        f"tại ({elem['cx']},{elem['cy']})"
+                    )
+                    await self.xw.device_click(self.device, elem["cx"], elem["cy"])
+                    await self._delay(1.0, 1.6)
+                    await self.screen_reader.wait_for_ui_change(self.device, xml, timeout=5.0, poll_interval=0.5)
+                    tapped = True
+                    break
+
+            if not tapped:
+                reopen_ok = await self.xw.open_url(self.device, target_url, browser_package)
+                log.info(f"[Phone:{self.device}] reopen_url during network recovery: {'OK' if reopen_ok else 'FAIL'}")
+                await self._delay(1.2, 1.8)
+
+        return handled_any
+
     async def _recover_chrome_loading_if_needed(self, browser_package: str, target_url: str) -> bool:
         """
         Nếu Chrome bị kẹt ở splash/loading screen sau khi mở URL, chủ động reopen/reload URL.
@@ -317,6 +405,26 @@ class PhoneRegistrationBot:
             await self._delay(1.2, 1.8)
 
         return True
+
+    async def _stabilize_chrome_surface_if_needed(self, browser_package: str, target_url: str) -> None:
+        """
+        Ổn định surface của Chrome trước khi verify product page:
+        onboarding -> network/reload -> loading/splash.
+        """
+        if browser_package != "com.android.chrome":
+            return
+
+        for _ in range(5):
+            handled = False
+            if await self._dismiss_chrome_first_run_if_needed(browser_package, target_url):
+                handled = True
+            elif await self._recover_chrome_network_error_if_needed(browser_package, target_url):
+                handled = True
+            elif await self._recover_chrome_loading_if_needed(browser_package, target_url):
+                handled = True
+
+            if not handled:
+                return
 
     async def _dismiss_chrome_first_run_if_needed(self, browser_package: str, target_url: str) -> bool:
         """
@@ -1216,8 +1324,7 @@ class PhoneRegistrationBot:
                 )
                 open_ok = await self.xw.open_url(self.device, unique_url, chosen_browser)
                 log.info(f"[Phone:{self.device}] open_url result: {'OK' if open_ok else 'FAIL'}")
-                await self._dismiss_chrome_first_run_if_needed(chosen_browser, unique_url)
-                await self._recover_chrome_loading_if_needed(chosen_browser, unique_url)
+                await self._stabilize_chrome_surface_if_needed(chosen_browser, unique_url)
 
                 page_verified, verify_reason, verify_xml = await self._verify_expected_product_page(
                     expected_host=expected_host,
