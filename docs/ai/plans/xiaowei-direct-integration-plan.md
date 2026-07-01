@@ -444,6 +444,9 @@ Checklist:
   - ưu tiên action `screenFile` khi có `savePath`
   - fallback `screen` để chịu được vendor-doc inconsistency
   - thêm wait ngắn để chờ file Windows được ghi ra disk
+- [x] Xác nhận trên máy Windows Nhật:
+  - XiaoWei vẫn không ghi file ảnh về workspace dù trả `SUCCESS`
+  - chuyển screenshot diagnostics thành warning không chặn `overall_success`
   - nút `Chẩn Đoán` trong dashboard
   - CLI `python main.py --diagnose-xiaowei`
 - [x] Truy xuất article official `234` qua endpoint `https://www.xiaowei.xin/api/manual/article?id=234`

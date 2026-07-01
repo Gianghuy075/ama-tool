@@ -235,10 +235,17 @@ async def _build_xiaowei_diagnostics_report(api_url: str, api_type: str, request
                 screenshot_exists = True
                 break
             await asyncio.sleep(0.2)
+    screenshot_step_success = screenshot_ok and screenshot_exists
     add_step(
         "screenshot",
-        screenshot_ok and screenshot_exists,
-        f"Lưu screenshot tại {screenshot_path}" if screenshot_ok else "Chụp screenshot thất bại",
+        screenshot_step_success,
+        (
+            f"Lưu screenshot tại {screenshot_path}"
+            if screenshot_step_success
+            else "XiaoWei trả trạng thái screenshot nhưng chưa thấy file trên disk"
+            if screenshot_ok
+            else "Chụp screenshot thất bại"
+        ),
         {"path": screenshot_path},
     )
 
@@ -258,7 +265,21 @@ async def _build_xiaowei_diagnostics_report(api_url: str, api_type: str, request
             f"Tìm thấy text gợi ý: {text_found}" if text_found else "Không thấy text gợi ý trong XML",
         )
 
-    report["overall_success"] = all(step["success"] for step in report["steps"])
+    required_steps = {
+        "get_devices",
+        "select_device",
+        "adb_wm_size",
+        "adb_pm_list_packages",
+        "uiautomator_dump",
+        "ui_text_probe",
+    }
+    report["overall_success"] = all(
+        step["success"] for step in report["steps"] if step["name"] in required_steps
+    )
+    if not screenshot_step_success:
+        report["warnings"] = [
+            "Screenshot step did not produce a local image file; treat as non-blocking while validating XiaoWei runtime."
+        ]
     report_path = os.path.join(diagnostics_dir, f"xiaowei_diagnostics_{file_stamp}.json")
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
