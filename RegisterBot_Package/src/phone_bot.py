@@ -1301,18 +1301,26 @@ class PhoneRegistrationBot:
             return "unknown", "Không có XML để phân loại màn hình"
 
         nodes = self.screen_reader._parse_nodes(xml)
-        input_nodes = [node for node in nodes if "edittext" in node["class"].lower() and node["enabled"]]
+        input_nodes = [
+            node for node in nodes
+            if "edittext" in node["class"].lower()
+            and node["enabled"]
+            and self._has_valid_node_geometry(node, min_width=80, min_height=24)
+        ]
         xml_lower = xml.lower()
 
-        signin_markers = [
+        signin_header_markers = [
             "sign in or create account",
+            "サインイン",
+            "sign in",
+        ]
+        signin_field_markers = [
             "enter mobile number or email",
             "enter email or mobile phone number",
             "メールアドレスまたは携帯電話番号",
             "携帯電話番号またはeメール",
-            "サインイン",
-            "続行",
-            "continue",
+            "email address",
+            "メールアドレス",
         ]
         create_account_markers = [
             "アカウントを作成",
@@ -1325,7 +1333,6 @@ class PhoneRegistrationBot:
             "名前",
             "your name",
             "first name",
-            "name",
         ]
         password_markers = [
             "パスワード",
@@ -1339,11 +1346,17 @@ class PhoneRegistrationBot:
             "コードを入力",
         ]
 
-        has_signin_marker = any(marker in xml_lower for marker in signin_markers)
+        has_signin_header = any(marker in xml_lower for marker in signin_header_markers)
+        has_signin_field_marker = any(marker in xml_lower for marker in signin_field_markers)
         has_create_account_marker = any(marker in xml_lower for marker in create_account_markers)
         has_name_marker = any(marker in xml_lower for marker in register_name_markers)
         has_password_marker = any(marker in xml_lower for marker in password_markers)
         has_otp_marker = any(marker in xml_lower for marker in otp_markers)
+        signin_field = self._find_signin_email_field(xml)
+        password_inputs = [
+            node for node in input_nodes
+            if node.get("password") or "password" in (node.get("text") or "").lower()
+        ]
 
         if has_otp_marker:
             return "otp", "Đang ở màn hình nhập OTP"
@@ -1351,13 +1364,13 @@ class PhoneRegistrationBot:
         if has_name_marker and has_password_marker and len(input_nodes) >= 2:
             return "register_form", f"Đang ở form đăng ký với {len(input_nodes)} input field(s)"
 
-        if has_signin_marker and input_nodes:
-            return "signin_entry", f"Đang ở màn sign-in entry với {len(input_nodes)} input field(s)"
+        if (has_signin_header or has_signin_field_marker) and signin_field:
+            return "signin_entry", "Đang ở màn sign-in entry với input email/mobile xác thực"
 
-        if has_create_account_marker and not has_name_marker:
+        if has_create_account_marker and (has_signin_header or has_signin_field_marker) and not has_name_marker:
             return "create_account_prompt", "Đang ở màn hình prompt/create-account transition"
 
-        if has_password_marker and input_nodes:
+        if has_password_marker and (password_inputs or len(input_nodes) >= 1):
             return "password_login", f"Đang ở màn password/login với {len(input_nodes)} input field(s)"
 
         return "unknown", "Không phân loại được surface Amazon account flow"
@@ -1551,6 +1564,14 @@ class PhoneRegistrationBot:
         if not xml:
             return False
 
+        state, reason = self._classify_account_surface(xml)
+        if state != "signin_entry":
+            log.error(
+                f"[Phone:{self.device}] Từ chối bấm Continue vì surface hiện tại không phải signin_entry: "
+                f"state='{state}' ({reason})"
+            )
+            return False
+
         field = self._find_signin_email_field(xml)
         if field:
             log.info(
@@ -1593,9 +1614,18 @@ class PhoneRegistrationBot:
     async def _type_into_signin_email_field(self, email: str) -> bool:
         """
         Nhập email vào đúng ô trên màn sign-in mobile web của Amazon.
-        Ưu tiên field finder chuyên dụng; fallback cuối cùng mới dùng bbox.
+        Chỉ cho phép nhập khi tìm thấy field chuyên dụng. Không fallback bbox mù,
+        để tránh gõ nhầm vào ô search của product page.
         """
         xml = await self.screen_reader.dump_ui(self.device)
+        state, reason = self._classify_account_surface(xml or "")
+        if state != "signin_entry":
+            log.error(
+                f"[Phone:{self.device}] Từ chối nhập email vì surface hiện tại không phải signin_entry: "
+                f"state='{state}' ({reason})"
+            )
+            return False
+
         field = self._find_signin_email_field(xml or "") if xml else None
         if field:
             log.info(
@@ -1611,13 +1641,8 @@ class PhoneRegistrationBot:
                 is_password=False,
             )
 
-        log.warning(f"[Phone:{self.device}] Không định vị được sign-in email field chuyên dụng, fallback bbox")
-        return await self._type_and_verify(
-            email,
-            10, 90, 28, 42,
-            description="Ô Email sign-in",
-            is_password=False,
-        )
+        log.error(f"[Phone:{self.device}] Không định vị được sign-in email field chuyên dụng, dừng để tránh gõ nhầm")
+        return False
 
     async def _type_into_labeled_field(
         self,

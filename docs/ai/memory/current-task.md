@@ -61,6 +61,9 @@ in_progress
     - log viewport signature để biết bot đã quét tới đâu
     - loại bỏ node bounds `0,0`
     - xác nhận anchor fallback không còn tap gần đầu màn hình
+  - retest false-positive guard:
+    - nếu chưa vào `signin_entry` thật thì bot phải dừng
+    - tuyệt đối không được gõ email vào ô search của product page
   - runtime verify app open/start
   - runtime verify tap/swipe/type_text
   - end-to-end 1 account

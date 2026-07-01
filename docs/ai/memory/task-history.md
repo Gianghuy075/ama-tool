@@ -225,6 +225,30 @@
   - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
   - pass
 
+## 2026-07-01 - False-positive guard for Step 3 email typing
+
+- Another runtime regression appeared after the CTA/state patches:
+  - bot could remain on the product page
+  - internal logic still advanced into Step 3
+  - email typing then hit the product-page search box instead of a real sign-in form
+- Root cause in repo:
+  - account-surface classification was still too loose
+  - Step 3 email input still allowed bbox fallback even when a real sign-in field was not confirmed
+  - Step 3 continue-button logic could also proceed without a strongly confirmed `signin_entry`
+- Fix implemented in `RegisterBot_Package/src/phone_bot.py`:
+  - tightened account-surface classification:
+    - `signin_entry` now requires a verified sign-in field, not just any `EditText`
+    - removed overly generic `name` marker from `register_form`
+  - email typing now hard-fails unless current surface is confirmed as `signin_entry`
+  - removed blind bbox fallback for sign-in email input
+  - continue-button tap now hard-fails unless current surface is confirmed as `signin_entry`
+- Design intent:
+  - fail early on surface ambiguity
+  - never type into the product-page search box again
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
+  - pass
+
 ## Mục tiêu
 
 Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user hoặc AI Agent.

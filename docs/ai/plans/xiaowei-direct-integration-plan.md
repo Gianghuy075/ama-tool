@@ -610,6 +610,11 @@ Kết luận:
     - loại bỏ hoàn toàn text/anchor node có bounds `0,0`
     - không cho anchor fallback tính từ `anchor_y2=0`
     - nếu post-click state đã là `signin_entry/create_account_prompt/register_form/password_login` thì verify pass ngay, không bị rule `info/help marker` phủ quyết sai
+  - patch fix tiếp theo cho false-positive Step 3:
+    - state classifier `signin_entry/register_form/password_login` được siết chặt theo cấu trúc form
+    - bỏ fallback nhập email bằng bbox mù
+    - bỏ quyền bấm `Continue` nếu surface hiện tại chưa được xác nhận là `signin_entry`
+    - mục tiêu: thà fail sớm còn hơn gõ email nhầm vào ô search của product page
 
 #### Wave 4 - Hardening production
 
