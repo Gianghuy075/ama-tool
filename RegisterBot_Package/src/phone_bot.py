@@ -617,6 +617,14 @@ class PhoneRegistrationBot:
                 await self._delay()
                 return True
 
+            if self._invitation_section_visible(xml or ""):
+                log.warning(
+                    f"[Phone:{self.device}] CTA/invitation section đã hiện trên màn hình nhưng chưa lấy được bounds đáng tin; "
+                    "thử tap vùng CTA tại màn hình hiện tại, không scroll tiếp"
+                )
+                await self._tap_bbox_pct(12, 88, 60, 78, "Fallback vùng CTA vàng Request Invitation")
+                return True
+
             if attempt < 3:
                 log.info(
                     f"[Phone:{self.device}] Chưa tìm được CTA vàng hợp lệ, cuộn thêm 1 nhịp "
@@ -627,6 +635,20 @@ class PhoneRegistrationBot:
 
         log.error(f"[Phone:{self.device}] Không tìm được CTA vàng '招待をリクエストする' hợp lệ")
         return False
+
+    def _invitation_section_visible(self, xml: str) -> bool:
+        if not xml:
+            return False
+        xml_lower = xml.lower()
+        markers = [
+            "招待をリクエストする",
+            "招待をリクエスト",
+            "request invitation",
+            "招待された方のみご購入いただけます",
+            "invitation-only",
+            "notice to customers",
+        ]
+        return any(marker in xml_lower for marker in markers)
 
     def _find_request_invitation_candidate(self, xml: str) -> Optional[dict]:
         """
@@ -648,13 +670,23 @@ class PhoneRegistrationBot:
 
         candidates = []
         for node in nodes:
-            raw_text = (node.get("text") or node.get("content_desc") or "").strip()
-            if not raw_text:
+            primary_text = (node.get("text") or "").strip()
+            secondary_text = (node.get("content_desc") or "").strip()
+            visible_text = primary_text or secondary_text
+            if not visible_text:
                 continue
 
-            raw_text_lower = raw_text.lower()
-            if not any(target.lower() in raw_text_lower for target in targets):
+            visible_text_lower = visible_text.lower()
+            # Nếu node đang hiện text riêng của nó là notice/help thì loại.
+            if any(noise in visible_text_lower for noise in ["notice to customers", "help", "ヘルプ"]):
                 continue
+            # Chỉ dùng content-desc fallback khi text trống. Nếu text đang là thứ khác thì không tin content-desc.
+            if primary_text:
+                if not any(target.lower() in primary_text.lower() for target in targets):
+                    continue
+            else:
+                if not any(target.lower() in secondary_text.lower() for target in targets):
+                    continue
 
             x_pct = (node["cx"] / max(1, screen_w)) * 100.0
             y_pct = (node["cy"] / max(1, screen_h)) * 100.0
@@ -662,11 +694,11 @@ class PhoneRegistrationBot:
             height_pct = (node["height"] / max(1, screen_h)) * 100.0
 
             score = 0.0
-            if raw_text == "招待をリクエストする":
+            if visible_text == "招待をリクエストする":
                 score += 140.0
-            elif raw_text == "招待をリクエスト":
+            elif visible_text == "招待をリクエスト":
                 score += 110.0
-            elif raw_text_lower == "request invitation":
+            elif visible_text_lower == "request invitation":
                 score += 100.0
             else:
                 score += 75.0
@@ -704,6 +736,7 @@ class PhoneRegistrationBot:
 
             candidate = {
                 **node,
+                "visible_text": visible_text,
                 "score": round(score, 2),
                 "x_pct": round(x_pct, 2),
                 "y_pct": round(y_pct, 2),
@@ -717,7 +750,7 @@ class PhoneRegistrationBot:
 
         candidates.sort(key=lambda item: item["score"], reverse=True)
         top_preview = [
-            f"({c['cx']},{c['cy']}) score={c['score']} y={c['y_pct']} width={c['width_pct']} text={c.get('text','')[:20]}"
+            f"({c['cx']},{c['cy']}) score={c['score']} y={c['y_pct']} width={c['width_pct']} text={c.get('visible_text','')[:30]}"
             for c in candidates[:3]
         ]
         log.info(f"[Phone:{self.device}] CTA candidates: {' | '.join(top_preview)}")
