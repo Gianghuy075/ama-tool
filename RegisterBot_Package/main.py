@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 
@@ -14,6 +16,7 @@ if getattr(sys, 'frozen', False):
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 import asyncio
+import json
 import time
 import random
 import string
@@ -1006,7 +1009,16 @@ if __name__ == "__main__":
         os.makedirs("data", exist_ok=True)
         os.makedirs("logs", exist_ok=True)
         
-        if "--cli" in sys.argv or "--phone" in sys.argv:
+        if "--diagnose-xiaowei" in sys.argv:
+            from src.web_server import run_xiaowei_diagnostics_sync
+            requested_device = ""
+            if "--device" in sys.argv:
+                idx = sys.argv.index("--device")
+                if idx + 1 < len(sys.argv):
+                    requested_device = sys.argv[idx + 1]
+            report = run_xiaowei_diagnostics_sync(requested_device=requested_device)
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        elif "--cli" in sys.argv or "--phone" in sys.argv:
             # Kiểm tra chế độ: Phone (XiaoWei) hay Browser (Playwright)
             xiaowei_config = CONFIG.get("xiaowei", {})
             use_phone = xiaowei_config.get("enable", False) or "--phone" in sys.argv
@@ -1048,5 +1060,3 @@ if __name__ == "__main__":
                 input("Nhấn Enter để thoát...")
             except Exception:
                 pass
-
-

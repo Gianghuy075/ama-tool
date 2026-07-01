@@ -26,13 +26,23 @@
     "xiaowei": {
         "enable": true,
         "api_type": "xiaowei",
-        "api_url": "http://127.0.0.1:22222",
+        "api_url": "http://REPLACE_WITH_REAL_XIAOWEI_HOST:PORT",
         "devices": "all",
         "otp_source": "gmail",
         "screenshot_dir": "data/screenshots",
         "tap_delay": [
             0.5,
             1.5
-        ]
+        ],
+        "human_typing": {
+            "char_delay_min": 0.08,
+            "char_delay_max": 0.22,
+            "thinking_time_min": 0.8,
+            "thinking_time_max": 1.8,
+            "typo_enabled": true,
+            "typo_probability": 0.05,
+            "typo_pause_before_backspace": 0.3,
+            "typo_pause_after_backspace": 0.15
+        }
     }
 }

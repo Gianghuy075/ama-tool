@@ -1,14 +1,15 @@
 """
-Phone Farm API Client — Giao tiếp với tool quản lý boxphone tự tạo.
-Tài liệu API: README-boxphone.md
-API Server: api_server.py (FastAPI + Uvicorn, mặc định http://127.0.0.1:5000)
+Phone backend client.
+Hỗ trợ:
+- XiaoWei WebSocket API (mặc định hiện tại)
+- Phone Farm HTTP API (legacy fallback)
 """
 
 import logging
 import time
 import json
 import asyncio
-from typing import Optional
+from typing import Optional, Any
 import random
 import string
 
@@ -19,11 +20,11 @@ log = logging.getLogger(__name__)
 
 class XiaoWeiClient:
     """
-    HTTP client cho Phone Farm API (tool tự tạo).
-    Tên class giữ nguyên XiaoWeiClient để tương thích ngược với phone_bot.py và web_server.py.
+    Client cho backend phone mode.
+    Tên class giữ nguyên để tương thích ngược với phone_bot.py và web_server.py.
     """
 
-    def __init__(self, api_url: str = "http://127.0.0.1:5000", api_type: str = "phone_farm", timeout: int = 30):
+    def __init__(self, api_url: str = "http://127.0.0.1:22222", api_type: str = "xiaowei", timeout: int = 30):
         self.api_url = api_url.rstrip("/")
         # Detect if it's pointing to 22222 port or api_type is xiaowei
         if "22222" in self.api_url or api_type == "xiaowei":
@@ -36,6 +37,59 @@ class XiaoWeiClient:
 
     # ── Core WebSocket helpers ────────────────────────────────────────
 
+    def _backend_label(self) -> str:
+        return "XiaoWei WS" if self.api_type == "xiaowei" else "PhoneFarm HTTP"
+
+    def _normalize_device(self, dev: Any, index: int = 0) -> dict:
+        """
+        Chuẩn hóa payload device từ nhiều backend/shape khác nhau về một format ổn định.
+        """
+        if isinstance(dev, dict):
+            serial = (
+                dev.get("serial")
+                or dev.get("onlySerial")
+                or dev.get("Serial")
+                or dev.get("id")
+                or dev.get("deviceId")
+                or dev.get("name")
+                or f"device-{index + 1}"
+            )
+            model = (
+                dev.get("model")
+                or dev.get("modelName")
+                or dev.get("Model")
+                or dev.get("deviceModel")
+                or dev.get("resolution")
+                or "Android Device"
+            )
+            status = (
+                dev.get("status")
+                or dev.get("Status")
+                or dev.get("state")
+                or dev.get("deviceStatus")
+                or "Online"
+            )
+            is_streaming = bool(dev.get("is_streaming", self.api_type == "xiaowei"))
+            is_selected = bool(dev.get("is_selected", self.api_type == "xiaowei"))
+        else:
+            serial = str(dev)
+            model = "Android Device"
+            status = "Online"
+            is_streaming = self.api_type == "xiaowei"
+            is_selected = self.api_type == "xiaowei"
+
+        normalized = {
+            "serial": str(serial),
+            "Serial": str(serial),
+            "model": str(model),
+            "Model": str(model),
+            "status": str(status),
+            "Status": str(status),
+            "is_streaming": is_streaming,
+            "is_selected": is_selected,
+        }
+        return normalized
+
     async def _send_websocket(self, payload: dict) -> dict:
         """Gửi payload qua WebSocket tới XiaoWei API."""
         ws_url = self.api_url
@@ -47,20 +101,32 @@ class XiaoWeiClient:
             ws_url = f"ws://{ws_url}"
         if not ws_url.endswith("/"):
             ws_url += "/"
-            
-        try:
-            import websockets
-            # Dùng asyncio.wait_for để quản lý timeout kết nối một cách an toàn và tương thích
-            ws = await asyncio.wait_for(websockets.connect(ws_url), timeout=self.timeout)
-            async with ws:
-                await ws.send(json.dumps(payload))
-                resp = await ws.recv()
-                result = json.loads(resp)
-                log.debug(f"[XiaoWei WS] Sent {payload.get('action')} -> {result}")
-                return result
-        except Exception as e:
-            log.error(f"[XiaoWei WS] Lỗi kết nối WebSocket tới {ws_url}: {e}")
-            return {"code": -1, "message": str(e), "data": None}
+
+        delay_ms = [100, 300, 600]
+        action = payload.get("action", "unknown")
+        last_error = None
+
+        for attempt in range(3):
+            try:
+                import websockets
+                ws = await asyncio.wait_for(websockets.connect(ws_url), timeout=self.timeout)
+                async with ws:
+                    await ws.send(json.dumps(payload))
+                    resp = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
+                    result = json.loads(resp)
+                    log.debug(f"[XiaoWei WS] {action} -> {result}")
+                    return result
+            except Exception as e:
+                last_error = e
+                if attempt < 2:
+                    wait = delay_ms[attempt] / 1000.0
+                    log.warning(
+                        f"[XiaoWei WS] {action} lần {attempt + 1} thất bại ({e}), retry sau {delay_ms[attempt]}ms"
+                    )
+                    await asyncio.sleep(wait)
+
+        log.error(f"[XiaoWei WS] {action} thất bại sau 3 lần thử tới {ws_url}: {last_error}")
+        return {"code": -1, "message": str(last_error), "data": None}
 
 
     async def _get_device_res(self, device: str) -> tuple[int, int]:
@@ -144,6 +210,7 @@ class XiaoWeiClient:
         if not result:
             return False
         return (result.get("status") == "success" or
+                result.get("success") is True or
                 result.get("code") == 10000 or
                 result.get("message") == "SUCCESS")
 
@@ -157,15 +224,7 @@ class XiaoWeiClient:
         if self.api_type == "xiaowei":
             res = await self._send_websocket({"action": "list"})
             if self._is_success(res) and isinstance(res.get("data"), list):
-                devices = []
-                for dev in res["data"]:
-                    devices.append({
-                        "Serial": dev.get("serial") or dev.get("onlySerial") or "",
-                        "Model": dev.get("model") or dev.get("modelName") or "Android Device",
-                        "Status": "Online",
-                        "is_streaming": True,
-                        "is_selected": True,
-                    })
+                devices = [self._normalize_device(dev, index=i) for i, dev in enumerate(res["data"])]
                 log.info(f"[XiaoWei WS] Tìm thấy {len(devices)} thiết bị")
                 return devices
             log.warning(f"[XiaoWei WS] Không lấy được danh sách thiết bị: {res}")
@@ -175,14 +234,12 @@ class XiaoWeiClient:
             result = await self._get("/api/devices")
             if result and isinstance(result, list):
                 devices = []
-                for dev in result:
-                    devices.append({
-                        "Serial": dev.get("serial"),
-                        "Model": dev.get("resolution", "Android Device"),
-                        "Status": "Online",
-                        "is_streaming": dev.get("is_streaming", False),
-                        "is_selected": dev.get("is_selected", False),
-                    })
+                for i, dev in enumerate(result):
+                    normalized = self._normalize_device(dev, index=i)
+                    if isinstance(dev, dict) and dev.get("resolution"):
+                        normalized["model"] = dev["resolution"]
+                        normalized["Model"] = dev["resolution"]
+                    devices.append(normalized)
                 log.info(f"[PhoneFarm] Tìm thấy {len(devices)} thiết bị")
                 return devices
             log.warning(f"[PhoneFarm] Không lấy được danh sách thiết bị: {result}")
@@ -201,17 +258,26 @@ class XiaoWeiClient:
             if devices is not None:
                 return {
                     "success": True,
+                    "backend": self.api_type,
+                    "backend_label": self._backend_label(),
+                    "api_url": self.api_url,
                     "message": f"Kết nối thành công! Tìm thấy {len(devices)} thiết bị.",
                     "devices": devices
                 }
             return {
                 "success": False,
+                "backend": self.api_type,
+                "backend_label": self._backend_label(),
+                "api_url": self.api_url,
                 "message": "Kết nối được nhưng không lấy được danh sách thiết bị.",
                 "devices": []
             }
         except Exception as e:
             return {
                 "success": False,
+                "backend": self.api_type,
+                "backend_label": self._backend_label(),
+                "api_url": self.api_url,
                 "message": f"Không thể kết nối: {e}",
                 "devices": []
             }
@@ -874,4 +940,3 @@ class XiaoWeiClient:
         success = self._is_success(result)
         log.info(f"[PhoneFarm] device_click ({x}, {y}) on {device}: {'OK' if success else 'FAIL'}")
         return success
-

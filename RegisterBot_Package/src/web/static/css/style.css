@@ -1020,6 +1020,61 @@ input:checked + .switch-sm .slider:before {
     border-top: 1px solid var(--border-color);
 }
 
+.xiaowei-diagnostics-results {
+    display: grid;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.xiaowei-diagnostics-summary {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.xiaowei-diagnostics-summary.success {
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+.xiaowei-diagnostics-summary.fail {
+    border-color: rgba(239, 68, 68, 0.25);
+}
+
+.xiaowei-diagnostic-step {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.xiaowei-diagnostic-step.pass {
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.xiaowei-diagnostic-step.fail {
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.xiaowei-diagnostic-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.xiaowei-diagnostic-detail {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
 /* Logs Tab styling */
 .logs-full-card {
     height: calc(100vh - 180px);

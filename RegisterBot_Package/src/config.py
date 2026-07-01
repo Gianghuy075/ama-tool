@@ -21,14 +21,14 @@ CONFIG = {
         "verify_ip": False,                 # Kiểm tra IP thực tế trước/sau khi đổi
     },
 
-    # ── Phone Farm (Tool Tự Tạo) ────────────────────────────────────────────
-    # Key giữ tên "xiaowei" để tương thích ngược với code hiện tại
+    # ── Phone Mode Backend ──────────────────────────────────────────────────
+    # Key vẫn giữ tên "xiaowei" để tương thích ngược với code hiện tại
     "xiaowei": {
-        "enable": True,                      # True = dùng điện thoại thật, False = dùng Playwright
-        "api_type": "phone_farm",             # Luôn là "phone_farm" (tool tự tạo)
-        "api_url": "http://127.0.0.1:5000",   # URL API Phone Farm (xem sidebar của tool)
+        "enable": True,                       # True = dùng điện thoại thật, False = dùng Playwright
+        "api_type": "xiaowei",                # Backend mặc định hiện tại là XiaoWei
+        "api_url": "http://127.0.0.1:22222",  # URL API XiaoWei local trên máy Windows chạy XiaoWei
         "devices": "all",                     # "all" hoặc danh sách serial: "serial1,serial2"
-        "otp_source": "gmail",                # "sms" (từ SIM điện thoại) hoặc "gmail" — dùng Gmail khi cắm Boxphone
+        "otp_source": "gmail",                # "sms" hoặc "gmail"
         "screenshot_dir": "data/screenshots", # Thư mục lưu ảnh chụp màn hình
         "tap_delay": [0.5, 1.5],              # Delay ngẫu nhiên giữa các thao tác (giây)
 
@@ -134,4 +134,3 @@ def save_dynamic_config(new_config_data):
     except Exception as e:
         print(f"[Config] Error saving config: {e}")
         return False
-

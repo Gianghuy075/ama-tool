@@ -1254,6 +1254,7 @@ function setupXiaoWeiControls() {
     const xwToggle = document.getElementById('cfg-xiaowei_enable');
     const xwFields = document.getElementById('xiaowei-fields');
     const btnTest = document.getElementById('btn-test-xiaowei');
+    const btnDiagnose = document.getElementById('btn-diagnose-xiaowei');
     
     if (xwToggle && xwFields) {
         xwToggle.addEventListener('change', () => {
@@ -1267,6 +1268,10 @@ function setupXiaoWeiControls() {
     
     if (btnTest) {
         btnTest.addEventListener('click', testXiaoWeiConnection);
+    }
+    
+    if (btnDiagnose) {
+        btnDiagnose.addEventListener('click', runXiaoWeiDiagnostics);
     }
 }
 
@@ -1340,5 +1345,84 @@ function renderXiaoWeiDevices(devices) {
         `;
     });
     
+    container.innerHTML = html;
+}
+
+async function runXiaoWeiDiagnostics() {
+    const apiUrl = document.getElementById('cfg-xiaowei_api_url').value.trim();
+    const apiType = document.getElementById('cfg-xiaowei_api_type').value || 'xiaowei';
+    const device = document.getElementById('cfg-xiaowei_devices').value.trim() || 'all';
+    const btnDiagnose = document.getElementById('btn-diagnose-xiaowei');
+    const panel = document.getElementById('xiaowei-diagnostics-panel');
+    const container = document.getElementById('xiaowei-diagnostics-results');
+
+    if (!apiUrl) {
+        showToast('Vui lòng nhập URL API XiaoWei trước khi chẩn đoán!', 'error');
+        return;
+    }
+
+    btnDiagnose.disabled = true;
+    btnDiagnose.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Đang chạy...';
+    panel.style.display = 'block';
+    container.innerHTML = '<p class="text-secondary text-sm">Đang chạy diagnostics XiaoWei...</p>';
+
+    try {
+        const response = await fetch('/api/xiaowei/diagnostics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_url: apiUrl, api_type: apiType, device })
+        });
+        const report = await response.json();
+        renderXiaoWeiDiagnostics(report);
+        if (report.overall_success) {
+            showToast('Diagnostics XiaoWei đã pass smoke test!', 'success');
+        } else {
+            showToast('Diagnostics XiaoWei phát hiện một số bước chưa pass.', 'error');
+        }
+    } catch (error) {
+        console.error('Error running XiaoWei diagnostics:', error);
+        container.innerHTML = '<p class="text-red text-sm"><i class="bx bx-x-circle"></i> Không thể chạy diagnostics.</p>';
+        showToast('Không thể chạy diagnostics XiaoWei!', 'error');
+    } finally {
+        btnDiagnose.disabled = false;
+        btnDiagnose.innerHTML = '<i class="bx bx-stethoscope"></i> Chẩn Đoán';
+    }
+}
+
+function renderXiaoWeiDiagnostics(report) {
+    const container = document.getElementById('xiaowei-diagnostics-results');
+    if (!container) return;
+
+    const overallSuccess = !!report.overall_success;
+    const backendLabel = report.backend_label || report.backend || 'unknown';
+    const selectedDevice = report.selected_device || 'N/A';
+    const reportPath = report.report_path || 'N/A';
+    const steps = Array.isArray(report.steps) ? report.steps : [];
+
+    let html = `
+        <div class="xiaowei-diagnostics-summary ${overallSuccess ? 'success' : 'fail'}">
+            <strong>${overallSuccess ? 'PASS' : 'CHECK REQUIRED'}</strong><br>
+            Backend: ${escapeHtml(String(backendLabel))}<br>
+            Device: ${escapeHtml(String(selectedDevice))}<br>
+            Report: ${escapeHtml(String(reportPath))}
+        </div>
+    `;
+
+    if (steps.length === 0) {
+        html += '<p class="text-secondary text-sm">Không có bước diagnostics nào được trả về.</p>';
+    } else {
+        steps.forEach((step) => {
+            html += `
+                <div class="xiaowei-diagnostic-step ${step.success ? 'pass' : 'fail'}">
+                    <div class="xiaowei-diagnostic-title">
+                        <i class="bx ${step.success ? 'bx-check-circle text-green' : 'bx-x-circle text-red'}"></i>
+                        <span>${escapeHtml(String(step.name || 'step'))}</span>
+                    </div>
+                    <div class="xiaowei-diagnostic-detail">${escapeHtml(String(step.detail || ''))}</div>
+                </div>
+            `;
+        });
+    }
+
     container.innerHTML = html;
 }

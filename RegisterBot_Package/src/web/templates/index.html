@@ -450,6 +450,9 @@
                                                     <button type="button" class="btn btn-success" id="btn-test-xiaowei" style="white-space: nowrap; padding: 8px 16px;">
                                                         <i class="bx bx-plug"></i> Kiểm Tra
                                                     </button>
+                                                    <button type="button" class="btn btn-primary" id="btn-diagnose-xiaowei" style="white-space: nowrap; padding: 8px 16px;">
+                                                        <i class="bx bx-stethoscope"></i> Chẩn Đoán
+                                                    </button>
                                                 </div>
                                                 <span class="help-text">Port API mặc định của XiaoWei (kiểm tra trong cài đặt phần mềm XiaoWei)</span>
                                             </div>
@@ -474,6 +477,14 @@
                                                 </div>
                                                 <div id="xiaowei-devices-list" class="xiaowei-devices-grid">
                                                     <p class="text-secondary text-sm">Bấm "Kiểm Tra" để quét thiết bị...</p>
+                                                </div>
+                                            </div>
+                                            <div class="xiaowei-devices-panel" id="xiaowei-diagnostics-panel" style="display: none;">
+                                                <div class="card-header" style="padding: 10px 0 6px 0;">
+                                                    <h3 style="font-size: 13px;"><i class="bx bx-pulse text-primary"></i> Kết Quả Chẩn Đoán</h3>
+                                                </div>
+                                                <div id="xiaowei-diagnostics-results" class="xiaowei-diagnostics-results">
+                                                    <p class="text-secondary text-sm">Bấm "Chẩn Đoán" để chạy smoke test XiaoWei.</p>
                                                 </div>
                                             </div>
                                         </div>
