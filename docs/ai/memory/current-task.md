@@ -43,8 +43,12 @@ in_progress
 
 - Tiếp tục `Phase 5` trên máy Windows Nhật có XiaoWei runtime thật
 - Ưu tiên thứ tự:
-  - retest fix false-negative `wrong_page_detected` trên Amazon product page thật
-  - xác nhận bot qua được `Step 1` và tới `Request Invitation`
+  - khóa đúng `browser surface`:
+    - không bị handoff sang `Amazon Shopping app`
+    - foreground phải là `Chrome mobile web`
+    - dismiss `Chrome first-run` / `Translate page` infobar nếu có
+  - tách rõ `product page visible` với `CTA clickable`
+  - locator lại nút CTA theo `anchor -> button below anchor -> verify -> back -> retry`
   - runtime verify app open/start
   - runtime verify tap/swipe/type_text
   - end-to-end 1 account

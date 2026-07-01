@@ -342,6 +342,61 @@ Mục tiêu:
 - giảm click sai nút / nhập sai ô input
 - tăng khả năng fail-safe + log evidence khi flow lệch
 
+### Rebaseline sau runtime thật 2026-07-01
+
+Các lần test thật trên máy Windows Nhật đã xác nhận một thay đổi quan trọng:
+
+- lỗi gốc không chỉ là `find CTA`
+- lỗi còn nằm ở `surface ownership`:
+  - cùng một `product_url` nhưng có lúc bị đẩy sang `Amazon Shopping app`
+  - khi đã chặn app handoff thì lại chạy trên `Chrome mobile web` với UI khác desktop/app
+  - `Chrome first-run`, `dịch trang`, mobile layout và app deep-link đều làm thay đổi UI/runtime state
+
+Kết luận:
+
+- mọi wave cũ liên quan CTA phải được hiểu là chỉ có giá trị **sau khi** đã khóa đúng surface:
+  - đúng package
+  - đúng foreground app
+  - đúng mobile web state
+  - không bị app handoff
+- các checkbox đã đánh dấu ở Wave 1/2 không đồng nghĩa CTA flow đã ổn định trong runtime thật
+- từ đây trở đi, ưu tiên số 1 là `surface control`, ưu tiên số 2 mới là `CTA targeting`
+
+### Bài toán S - Surface control trước khi tìm CTA
+
+#### S1. Khóa đúng package đích
+
+- [ ] Mở `product_url` nhưng bắt buộc foreground phải là `com.android.chrome`
+- [ ] Không chấp nhận bị handoff sang `Amazon Shopping app`
+- [ ] Nếu foreground package lệch:
+  - [ ] log rõ package hiện tại
+  - [ ] `Back` hoặc kill app sai
+  - [ ] mở lại URL trong Chrome
+
+#### S2. Xác minh foreground/runtime state
+
+- [ ] Thêm check foreground package bằng `adb dumpsys activity` hoặc tương đương
+- [ ] Log rõ:
+  - [x] browser package được chọn
+  - [ ] foreground package sau `open_url`
+  - [ ] foreground package trước khi click CTA
+  - [ ] foreground package sau khi click CTA
+
+#### S3. Chuẩn hóa state của Chrome mobile web
+
+- [x] Handle `Chrome first-run/onboarding`
+- [ ] Handle `Translate page` / thanh dịch của Chrome
+- [ ] Handle biến thể mobile web English/Japanese
+- [ ] Handle popup/infobar che khu vực CTA
+
+#### S4. Rule mới cho điều hướng
+
+- [ ] Chỉ khi `surface_ok == true` mới được chạy logic tìm CTA
+- [ ] Nếu `surface_ok == false` thì không scroll và không click CTA
+- [ ] Product page verify phải tách bạch:
+  - [ ] `url/product fingerprint exists`
+  - [ ] `CTA viewport ready`
+
 ### Bài toán A - Xác định đã vào đúng link Amazon chưa
 
 #### A1. Khóa chặt đầu vào `product_url`
@@ -355,8 +410,9 @@ Mục tiêu:
 
 - [x] Log `Product URL gốc`
 - [x] Log `URL sau randomize`
-- [ ] Log browser package thực tế được chọn
+- [x] Log browser package thực tế được chọn
 - [x] Log kết quả `open_url()` thành công/thất bại
+- [ ] Log foreground package sau `open_url()`
 
 #### A3. Xác minh “đúng trang” bằng page fingerprint
 
@@ -368,6 +424,7 @@ Mục tiêu:
   - [x] text đặc trưng của CTA như `招待をリクエストする`
 - [ ] Không dựa vào 1 text đơn lẻ
 - [x] Hỗ trợ nhiều pattern cho trang sản phẩm Amazon JP
+- [ ] Tách riêng `product page visible` và `CTA clickable on current viewport`
 
 #### A4. Cơ chế phát hiện sai trang
 
@@ -419,7 +476,7 @@ Mục tiêu:
 #### B3. Anchor-based targeting
 
 - [x] Hỗ trợ tìm input theo label gần kề
-- [ ] Hỗ trợ tìm button theo block/section gần text anchor
+- [x] Hỗ trợ tìm button theo block/section gần text anchor
 - [ ] Hỗ trợ quan hệ:
   - [x] node bên dưới anchor
   - [ ] node cùng container
@@ -430,25 +487,27 @@ Mục tiêu:
 - [ ] Bbox chỉ còn là fallback cuối
 - [ ] Không click bbox nếu chưa qua precondition hợp lý
 - [ ] Với CTA quan trọng như `Request Invitation`, nếu không thấy text thật thì fail-safe thay vì click bừa
-- [x] Step `Request Invitation` đã chuyển sang search + scroll ngắn + fail-safe
+- [ ] Step `Request Invitation` không còn fallback bbox mù; chỉ cho phép `anchor-based` hoặc `vision-based` fallback
 
 #### B5. Scroll strategy ổn định hơn
 
 - [x] Thay `scroll_down(3)` bằng incremental scroll search ở các step quan trọng
 - [x] Sau mỗi lần scroll phải dump UI và tìm lại
-- [ ] Giới hạn số lần scroll theo từng step
+- [x] Giới hạn số lần scroll theo từng step
 - [x] Nếu scroll quá budget mà chưa thấy element thì fail an toàn
+- [ ] Không scroll khi `invitation anchor` đang visible trên viewport
 
 #### B6. Verify sau mỗi action
 
-- [ ] Sau click CTA phải verify state mới
+- [x] Sau click CTA phải verify state mới
 - [ ] Sau nhập email phải verify text hoặc verify màn hình chuyển bước
 - [ ] Sau submit phải verify page fingerprint mới
 - [ ] Nếu verify fail:
-  - [ ] retry có kiểm soát
+  - [x] retry có kiểm soát
   - [ ] chụp screenshot
   - [ ] dump XML
-  - [ ] dừng step nếu vượt retry budget
+  - [x] dừng step nếu vượt retry budget
+- [ ] Verify CTA click phải yêu cầu form/input thật, không pass chỉ vì 1 text rời rạc như `Password`
 
 #### B7. Input targeting chính xác hơn
 
@@ -466,6 +525,7 @@ Mục tiêu:
 - [ ] Đánh giá bổ sung OCR/image matching chỉ như fallback
 - [ ] Chỉ dùng fallback vision nếu XML không có node đáng tin
 - [ ] Không dùng vision làm main path khi chưa thật sự cần
+- [ ] Ưu tiên fallback vision riêng cho nút vàng `Request invite / 招待をリクエストする`
 
 ### Roadmap triển khai cải tiến
 
@@ -476,6 +536,10 @@ Mục tiêu:
 - [x] Log `Product URL gốc` + `URL sau randomize`
 - [x] Wrong-page detection cơ bản
 - [x] Fail-safe nếu không thấy `Request Invitation`
+- [ ] Rebaseline:
+  - các hạng mục trên chỉ mới đúng ở mức `product page open`
+  - chưa giải quyết bài toán `surface control`
+  - chưa đủ để đảm bảo CTA flow chạy đúng runtime thật
 
 #### Wave 2 - Ổn định element targeting
 
@@ -484,13 +548,25 @@ Mục tiêu:
 - [x] anchor-based targeting cho email field
 - [x] anchor-based targeting cho create-account button
 - [x] incremental scroll search chuẩn hóa
+- [ ] Rebaseline:
+  - locator CTA vẫn chưa ổn định trên Chrome mobile web thực tế
+  - cần nâng từ `text/geometry heuristic` sang `surface-aware + anchor-structure + optional vision fallback`
 
 #### Wave 3 - Verify & recovery
 
-- [ ] verify state sau click/typing/submit
-- [ ] retry budget theo từng step
+- [x] verify state sau click/typing/submit
+- [x] retry budget theo từng step
 - [ ] chuẩn hóa note/error code
 - [ ] screenshot + XML evidence đồng bộ theo step fail
+
+#### Wave S - Surface control
+
+- [ ] chặn app handoff sang `Amazon Shopping`
+- [ ] verify foreground package sau `open_url`
+- [ ] verify foreground package trước/sau click CTA
+- [ ] dismiss `Chrome first-run`
+- [ ] xử lý `Translate page` infobar
+- [ ] xác nhận Chrome mobile web variant ổn định trước khi vào CTA flow
 
 ### Ghi nhận runtime mới nhất
 
@@ -508,6 +584,9 @@ Mục tiêu:
     - kéo code mới trên máy Nhật
     - chạy lại 1 account thật
     - xác nhận bot qua được `Step 1` và tiếp tục tới `Request Invitation`
+  - rebaseline mới:
+    - nguyên nhân gốc đã được mở rộng thành `surface control + CTA targeting + post-click recovery`
+    - không thể coi Wave 1/2 là đủ để end-to-end ổn định nếu chưa khóa đúng browser surface
 
 #### Wave 4 - Hardening production
 

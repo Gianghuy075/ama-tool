@@ -137,6 +137,23 @@
   - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py RegisterBot_Package/src/screen_reader.py`
   - pass
 
+## 2026-07-01 - Runtime rebaseline: surface control is part of the core problem
+
+- Further real-device tests on the Japan Windows machine changed the understanding of the CTA issue:
+  - opening the same Amazon product URL could hand off into `Amazon Shopping app`
+  - after removing that app from the phone, the same URL stayed in `Chrome mobile web` but the UI variant changed again
+  - `Chrome first-run`, `Translate page` UI, mobile web layout, and CTA visibility all affect the flow before CTA targeting even starts
+- Conclusion:
+  - the improvement plan can no longer treat CTA-finding as an isolated problem
+  - `surface control` must be considered a prerequisite layer:
+    - correct foreground package
+    - no app handoff
+    - stable Chrome runtime state
+    - CTA viewport readiness
+- The XiaoWei improvement plan was rebaselined accordingly:
+  - Wave 1 and Wave 2 remain useful but are no longer sufficient indicators of runtime readiness
+  - a new `Wave S - Surface control` was added ahead of CTA hardening
+
 ## Mục tiêu
 
 Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user hoặc AI Agent.
