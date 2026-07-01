@@ -23,6 +23,15 @@ Mục tiêu vận hành:
 
 ## Trạng thái tổng quan
 
+- Thứ tự đúng trên nhánh này:
+  1. Hoàn thành `XiaoWei direct integration baseline`
+  2. Xác nhận `RegisterBot` chạy được trên máy Windows Nhật với backend XiaoWei
+  3. Sau đó mới tiếp tục `flow hardening` cho Amazon product page, CTA, sign-in, register form
+- `Plan cải tiến` bên dưới không thay thế plan XiaoWei gốc.
+- Mọi thay đổi ở `Phase 5+` phải phục vụ mục tiêu baseline trước:
+  - bot chạy qua được luồng thật trên Chrome mobile web bằng XiaoWei
+  - xác nhận được lỗi nằm ở `XiaoWei integration layer` hay ở `Amazon flow logic`
+
 - [x] Đọc và phân tích codebase hiện tại
 - [x] Xác định `RegisterBot` đã có nhánh hỗ trợ `xiaowei`
 - [x] Xác định dashboard đã có UI test/list device XiaoWei
@@ -54,6 +63,8 @@ Mục tiêu vận hành:
 
 - `Current phase`: `Phase 5`
 - `Overall progress`: khoảng `80%`
+- `Track đang ưu tiên`: `Track A - XiaoWei direct integration baseline`
+- `Track phụ`: `Track B - Amazon flow hardening sau baseline`
 - `Đã xong trong repo`:
   - adapter XiaoWei đã được gia cố
   - có UI test connection
@@ -67,7 +78,42 @@ Mục tiêu vận hành:
   - endpoint handbook tree đã xác định được nhưng site XiaoWei phản hồi không ổn định khi truy vấn sâu
   - screenshot-to-file của XiaoWei runtime trên máy Nhật chưa ghi file local dù API trả `SUCCESS`
   - `tap/swipe/type_text/open_app` và end-to-end registration vẫn cần runtime evidence
-  - flow Amazon thật hiện đã vào đúng product page nhưng vẫn cần retest sau khi nới `product page fingerprint` để tránh false wrong-page
+  - flow Amazon thật hiện chưa ổn định ở lớp quan sát/runtime verify trên Chrome mobile web
+
+## Cách chia track để không lẫn
+
+### Track A - XiaoWei direct integration baseline
+
+Phạm vi:
+
+- kết nối runtime XiaoWei
+- list devices
+- diagnostics
+- tap/swipe/type/open_url/open_app
+- screenreader compatibility
+- chạy được 1 account thật trên Windows Nhật
+
+Điều kiện coi là xong Track A:
+
+- `python main.py` chạy được với backend `xiaowei`
+- bot đi được luồng thật trên 1 device chỉ định
+- có evidence runtime cho từng nhóm hành động chính
+- phân biệt rõ lỗi do `integration/runtime` và lỗi do `Amazon page flow`
+
+### Track B - Amazon flow hardening
+
+Phạm vi:
+
+- khóa browser surface
+- tìm CTA ổn định
+- sign-in/create-account/register-form targeting
+- recovery khi click sai hoặc bị app handoff
+
+Rule:
+
+- Track B chỉ là lớp cải tiến chất lượng cho `Phase 5-7`
+- không được làm mờ mục tiêu gốc của nhánh là `XiaoWei direct integration`
+- nếu một patch hardening làm bot lệch khỏi baseline hoặc làm trạng thái giả, phải ưu tiên rollback/rebaseline trước
 
 ## Bối cảnh kỹ thuật đã xác nhận
 
@@ -336,6 +382,20 @@ Checklist:
 
 Phần này có thể nằm luôn trong plan XiaoWei hiện tại. Đây là nhánh cải tiến kỹ thuật phục vụ trực tiếp cho `Phase 5`, `Phase 6` và `Phase 7`.
 
+### Trạng thái hiện tại của plan cải tiến
+
+- `Kết luận`: plan cải tiến CTA/sign-in đã `fail` ở lớp `observation/runtime verification`
+- Nghĩa là:
+  - bot log nội bộ có thể nói đã thấy CTA / đã sang sign-in
+  - nhưng runtime thật trên phone vẫn đang ở màn khác
+  - vì vậy các heuristic hiện tại không còn đủ tin cậy để tiếp tục vá chồng
+- Quy tắc mới:
+  - không cộng thêm heuristic mới lên nền logic đã fail này
+  - phải `rebaseline` về `XiaoWei integration baseline`
+  - sau đó xây lại `Amazon web flow` theo hướng tách riêng:
+    - `system/chrome shell control`
+    - `web content verification`
+
 Mục tiêu:
 
 - giảm trường hợp bot vào sai trang
@@ -537,10 +597,10 @@ Kết luận:
 - [x] Log `Product URL gốc` + `URL sau randomize`
 - [x] Wrong-page detection cơ bản
 - [x] Fail-safe nếu không thấy `Request Invitation`
-- [ ] Rebaseline:
+- [x] Rebaseline:
   - các hạng mục trên chỉ mới đúng ở mức `product page open`
   - chưa giải quyết bài toán `surface control`
-  - chưa đủ để đảm bảo CTA flow chạy đúng runtime thật
+  - đã được xác nhận là không đủ để đảm bảo CTA flow chạy đúng runtime thật
 
 #### Wave 2 - Ổn định element targeting
 
@@ -549,9 +609,9 @@ Kết luận:
 - [x] anchor-based targeting cho email field
 - [x] anchor-based targeting cho create-account button
 - [x] incremental scroll search chuẩn hóa
-- [ ] Rebaseline:
+- [x] Rebaseline:
   - locator CTA vẫn chưa ổn định trên Chrome mobile web thực tế
-  - cần nâng từ `text/geometry heuristic` sang `surface-aware + anchor-structure + optional vision fallback`
+  - runtime thật đã xác nhận hướng `text/geometry heuristic` hiện tại là không đủ tin cậy
 
 #### Wave 3 - Verify & recovery
 
@@ -564,6 +624,9 @@ Kết luận:
   - `password_login`
 - [ ] chuẩn hóa note/error code
 - [ ] screenshot + XML evidence đồng bộ theo step fail
+- [x] Kết luận fail:
+  - lớp verify/state hiện tại đã sinh false-positive
+  - có trường hợp log nói CTA click thành công hoặc đã vào sign-in nhưng runtime thật vẫn đang ở product page/search bar
 
 #### Wave S - Surface control
 
@@ -576,6 +639,18 @@ Kết luận:
 - [ ] xác nhận Chrome mobile web variant ổn định trước khi vào CTA flow
 
 ### Ghi nhận runtime mới nhất
+
+- 2026-07-02:
+  - runtime thật xác nhận plan cải tiến hiện tại đã fail hoàn toàn ở lớp quan sát
+  - bot có thể:
+    - đứng yên ở product page nhưng log vẫn cho rằng CTA đã click thành công
+    - log đã vào `signin_entry/password_login` trong khi thực tế phone vẫn ở Chrome/search surface khác
+    - gõ email vào ô search/top bar thay vì form sign-in thật
+  - quyết định mới:
+    - đóng băng plan cải tiến hiện tại như evidence thất bại
+    - không vá chồng thêm heuristic trên nhánh logic này
+    - rebaseline về `65a9085` cho `phone_bot.py` để giữ surface recovery nhưng bỏ lớp state-machine false-positive từ `90a951e` trở đi
+    - sau baseline XiaoWei sẽ thiết kế lại flow Amazon theo hướng `web content verification` đáng tin cậy hơn
 
 - 2026-07-01:
   - máy Windows Nhật đã xác nhận CLI/UI diagnostics pass với XiaoWei runtime

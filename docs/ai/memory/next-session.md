@@ -23,16 +23,33 @@
 
 ## Recommended next step
 
-1. Pull the latest repo state on the Japan Windows machine because there is a new Step-1 false-negative fix:
-   - broader Amazon product-page fingerprint
-   - `preferred_region` scoring bug fix
-2. Re-run one real Amazon registration account on XiaoWei.
-3. Confirm specifically:
-   - bot no longer stops at `Wrong page detected...` when already on a real Amazon product page
-   - bot can continue from Step 1 to `Request Invitation`
-4. If Step 1 passes:
-   - continue evaluating click/input stability on the next steps
-   - then move toward full end-to-end verification
+1. Giữ đúng thứ tự của nhánh `feature/xiaowei-e2e-readiness`:
+   - trước hết hoàn thành `XiaoWei direct integration baseline`
+   - sau đó mới tiếp tục `Amazon flow hardening`
+2. Re-run trên máy Windows Nhật nhưng đánh giá theo baseline trước:
+   - mở đúng `Chrome`
+   - mở đúng `product_url`
+   - không bị app handoff / false-positive state
+   - runtime action `tap/swipe/type/open_url/open_app` có evidence thật
+3. Chỉ khi baseline trên ổn mới tiếp tục đánh giá:
+   - `Request Invitation` CTA
+   - sign-in / create-account / register-form
+4. Nếu bot vẫn log state sai khác runtime thật:
+   - dừng vá thêm heuristic
+   - rebaseline hoặc rollback phần hardening gây lệch state
+
+## Reset đã thực hiện
+
+- Plan cải tiến CTA/sign-in cũ đã được đánh dấu là `fail ở observation/runtime verification`.
+- `RegisterBot_Package/src/phone_bot.py` đã rollback về snapshot `65a9085`.
+- Phần được giữ lại:
+  - `Chrome loading/network recovery`
+  - `open_url -> verify product page -> open CTA flow` baseline
+- Phần đã bỏ:
+  - `signin_entry/create_account_prompt/register_form/password_login` state machine
+  - `Request invite` / `Available by invitation` heuristic mới
+  - `short-sweep` / `first-fold CTA probe`
+  - các false-positive guard được dựng trên observation layer không đáng tin
 
 ## Bắt đầu từ đâu?
 
@@ -52,7 +69,7 @@
 
 - Tiếp tục plan XiaoWei tại `docs/ai/plans/xiaowei-direct-integration-plan.md`
 - Ưu tiên:
-  - retest fix `wrong_page_detected` false-negative trên Amazon product page thật
-  - xác nhận bước `Request Invitation` sau khi Step 1 pass
-  - verify `startApk` / app-open runtime thật
-  - chạy 1 account end-to-end
+  - khóa lại baseline XiaoWei thật trên Windows JP
+  - verify `startApk` / `open_app` / `open_url` / `tap` / `swipe` / `type_text`
+  - chạy được 1 account thật với backend XiaoWei
+  - sau đó mới quay lại `Request Invitation` + sign-in hardening

@@ -238,6 +238,32 @@
 - Fix implemented in `RegisterBot_Package/src/phone_bot.py`:
   - tightened account-surface classification:
     - `signin_entry` now requires a verified sign-in field, not just any `EditText`
+
+## 2026-07-02 - Reset after CTA/sign-in improvement plan failed
+
+- Real-device runtime on the Japan Windows machine invalidated the current CTA/sign-in hardening branch:
+  - bot could stay on the product page or search/top-bar surface
+  - internal logs still advanced as if CTA click and sign-in detection had succeeded
+  - email could then be typed into the wrong field while internal state claimed account flow progress
+- Decision taken on branch `feature/xiaowei-e2e-readiness`:
+  - stop stacking more heuristics on the failed observation layer
+  - rebaseline back to `XiaoWei direct integration baseline`
+  - preserve stable `Chrome loading/network recovery`
+  - remove the later CTA/sign-in state-machine logic from `90a951e` onward
+- Repo changes made:
+  - `docs/ai/plans/xiaowei-direct-integration-plan.md`
+    - marked the current improvement plan as failed at `observation/runtime verification`
+    - clarified that the branch priority is still `XiaoWei direct integration baseline` first
+  - `RegisterBot_Package/src/phone_bot.py`
+    - rolled back to snapshot `65a9085`
+    - removed later runtime heuristics such as:
+      - `signin_entry/create_account_prompt/register_form/password_login` state classification
+      - `short-sweep` CTA scanning
+      - `first-fold CTA probe`
+      - `Request invite` / `Available by invitation` expansion
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
+  - pass
     - removed overly generic `name` marker from `register_form`
   - email typing now hard-fails unless current surface is confirmed as `signin_entry`
   - removed blind bbox fallback for sign-in email input

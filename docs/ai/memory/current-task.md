@@ -4,6 +4,11 @@
 
 Chuẩn bị migration phone mode từ `android_phone_farm` sang `RegisterBot -> XiaoWei API` và hoàn thiện bộ công cụ test/diagnostics để team test thật trên máy Windows Nhật.
 
+Ưu tiên hiện tại trên nhánh này:
+
+1. Hoàn thành `XiaoWei direct integration baseline`
+2. Chỉ sau đó mới tiếp tục `Amazon CTA/sign-in/register hardening`
+
 ## Trạng thái
 
 in_progress
@@ -41,29 +46,17 @@ in_progress
 
 ## Next action
 
-- Tiếp tục `Phase 5` trên máy Windows Nhật có XiaoWei runtime thật
-- Ưu tiên thứ tự:
-  - khóa đúng `browser surface`:
-    - không bị handoff sang `Amazon Shopping app`
-    - foreground phải là `Chrome mobile web`
-    - dismiss `Chrome first-run` / `Translate page` infobar nếu có
-  - tách rõ `product page visible` với `CTA clickable`
-  - locator lại nút CTA theo `anchor -> button below anchor -> verify -> back -> retry`
-  - retest `sign-in mobile web` với patch mới:
-    - nhận đúng `signin_entry`
-    - nhập đúng ô `Enter mobile number or email`
-    - bấm đúng nút vàng `Continue`
-    - phân biệt rõ `create_account_prompt` / `register_form` / `password_login`
-  - retest lại `product CTA search` với patch mới:
-    - nhận `Request invite`/`Available by invitation`
-    - không scroll preset mù
-    - dùng short-sweep có overlap
-    - log viewport signature để biết bot đã quét tới đâu
-    - loại bỏ node bounds `0,0`
-    - xác nhận anchor fallback không còn tap gần đầu màn hình
-  - retest false-positive guard:
-    - nếu chưa vào `signin_entry` thật thì bot phải dừng
-    - tuyệt đối không được gõ email vào ô search của product page
-  - runtime verify app open/start
-  - runtime verify tap/swipe/type_text
-  - end-to-end 1 account
+- Tiếp tục `Phase 5` nhưng theo đúng thứ tự baseline:
+  - ổn định lại `open Chrome -> open product URL -> giữ đúng surface`
+  - runtime verify `open_app`, `open_url`, `tap`, `swipe`, `type_text`
+  - xác nhận bot chạy được trên 1 device chỉ định bằng XiaoWei
+  - chỉ khi baseline đó ổn mới tiếp tục hardening `CTA/sign-in/register`
+- Không tiếp tục cộng dồn heuristic mới nếu runtime truth và internal state còn lệch nhau.
+- Nếu patch hardening tạo false-positive state:
+  - ưu tiên rebaseline/rollback phần đó
+  - không cố vá tiếp trên assumption sai
+- Trạng thái reset hiện tại:
+  - `docs/ai/plans/xiaowei-direct-integration-plan.md` đã đánh dấu plan cải tiến CTA/sign-in hiện tại là fail
+  - `RegisterBot_Package/src/phone_bot.py` đã được rollback về mốc `65a9085`
+  - giữ lại các fix `Chrome loading/network surface recovery`
+  - bỏ lớp `signin_entry/create_account_prompt/register_form/password_login` false-positive từ `90a951e` trở đi
