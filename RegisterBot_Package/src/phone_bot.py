@@ -488,6 +488,7 @@ class PhoneRegistrationBot:
         clickable: Optional[bool] = True,
         focusable: Optional[bool] = None,
         preferred_region: tuple[float, float, float, float] = None,
+        partial: bool = True,
     ) -> bool:
         """
         Tìm node tốt nhất bằng scoring, cuộn từng nhịp ngắn nếu chưa thấy.
@@ -503,6 +504,7 @@ class PhoneRegistrationBot:
                     clickable=clickable,
                     focusable=focusable,
                     preferred_region=preferred_region,
+                    partial=partial,
                 )
                 if elem:
                     log.info(
@@ -523,6 +525,56 @@ class PhoneRegistrationBot:
 
         log.error(f"[Phone:{self.device}] Không tìm thấy '{description or (texts or ['element'])[0]}' sau {max_scrolls} lần cuộn")
         return False
+
+    async def _tap_request_invitation_cta(self) -> bool:
+        """
+        Chỉ nhắm đúng CTA vàng `招待をリクエストする` trên product page.
+        Tránh click nhầm vào link/info block có text gần giống.
+        """
+        exact_region = (8, 92, 58, 86)
+        loose_region = (8, 92, 50, 90)
+        button_like_classes = [
+            "android.widget.Button",
+            "android.widget.TextView",
+            "android.view.View",
+        ]
+
+        # Pass 1: exact/near-exact Japanese CTA ở vùng nút vàng.
+        found = await self._tap_best_element_with_scroll_search(
+            texts=["招待をリクエストする"],
+            description="CTA 招待をリクエストする",
+            max_scrolls=3,
+            clickable=True,
+            classes=button_like_classes,
+            preferred_region=exact_region,
+            partial=False,
+        )
+        if found:
+            return True
+
+        # Pass 2: partial Japanese CTA nhưng vẫn khóa vùng CTA và class hợp lệ.
+        found = await self._tap_best_element_with_scroll_search(
+            texts=["招待をリクエストする", "招待をリクエスト"],
+            description="CTA 招待をリクエストする",
+            max_scrolls=4,
+            clickable=True,
+            classes=button_like_classes,
+            preferred_region=loose_region,
+            partial=True,
+        )
+        if found:
+            return True
+
+        # Pass 3: fallback English exact nhưng vẫn chỉ trong vùng CTA.
+        return await self._tap_best_element_with_scroll_search(
+            texts=["Request Invitation"],
+            description="CTA Request Invitation",
+            max_scrolls=2,
+            clickable=True,
+            classes=button_like_classes,
+            preferred_region=loose_region,
+            partial=False,
+        )
 
     async def _type_into_labeled_field(
         self,
@@ -737,17 +789,8 @@ class PhoneRegistrationBot:
                 result["note"] = "Stopped by user"
                 return result
 
-            log.info(f"[Phone:{self.device}] Step 2 – Tìm nút Request Invitation theo UI thực...")
-            tapped_request = await self._tap_element_with_scroll_search(
-                [
-                    "招待をリクエストする",
-                    "招待をリクエスト",
-                    "Request Invitation",
-                    "Invitation",
-                ],
-                description="Nút Request Invitation",
-                max_scrolls=3,
-            )
+            log.info(f"[Phone:{self.device}] Step 2 – Tìm đúng CTA vàng '招待をリクエストする' trên product page...")
+            tapped_request = await self._tap_request_invitation_cta()
             if not tapped_request:
                 result["note"] = "Không tìm thấy nút Request Invitation trên trang sản phẩm"
                 await self._screenshot_step("step2_FAILED_request_invitation_not_found")
