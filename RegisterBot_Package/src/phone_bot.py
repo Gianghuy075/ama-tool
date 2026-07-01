@@ -599,7 +599,7 @@ class PhoneRegistrationBot:
         log.error(f"[Phone:{self.device}] Không tìm thấy '{description or (texts or ['element'])[0]}' sau {max_scrolls} lần cuộn")
         return False
 
-    async def _tap_request_invitation_cta(self) -> bool:
+    async def _tap_request_invitation_cta(self) -> tuple[bool, str]:
         """
         Chỉ nhắm đúng CTA vàng `招待をリクエストする` trên product page.
         Tránh click nhầm vào link/info block có text gần giống.
@@ -611,20 +611,31 @@ class PhoneRegistrationBot:
                 log.info(
                     f"[Phone:{self.device}] CTA candidate tốt nhất tại ({elem['cx']},{elem['cy']}) "
                     f"score={elem.get('score')} width_pct={elem.get('width_pct')} y_pct={elem.get('y_pct')} "
-                    f"text='{elem.get('text', '')[:40]}'"
+                    f"text='{elem.get('visible_text', '')[:40]}'"
                 )
                 await self.xw.device_click(self.device, elem["cx"], elem["cy"])
                 await self._delay()
-                return True
+                return True, "text_candidate"
 
             anchor = self._find_invitation_anchor(xml or "")
             if anchor:
+                anchor_button = self._find_cta_below_anchor(xml or "", anchor)
+                if anchor_button:
+                    log.info(
+                        f"[Phone:{self.device}] CTA dưới anchor tại ({anchor_button['cx']},{anchor_button['cy']}) "
+                        f"score={anchor_button.get('score')} y_pct={anchor_button.get('y_pct')} "
+                        f"width_pct={anchor_button.get('width_pct')}"
+                    )
+                    await self.xw.device_click(self.device, anchor_button["cx"], anchor_button["cy"])
+                    await self._delay()
+                    return True, "anchor_button_candidate"
+
                 log.warning(
                     f"[Phone:{self.device}] Đã thấy invitation anchor '{anchor.get('visible_text', '')[:40]}' "
                     "nhưng chưa có bounds CTA đáng tin; fallback tap theo anchor, không scroll tiếp"
                 )
                 await self._tap_request_invitation_from_anchor(anchor)
-                return True
+                return True, "anchor_fallback"
 
             if attempt < 3:
                 log.info(
@@ -635,7 +646,7 @@ class PhoneRegistrationBot:
                 await self._delay(0.8, 1.5)
 
         log.error(f"[Phone:{self.device}] Không tìm được CTA vàng '招待をリクエストする' hợp lệ")
-        return False
+        return False, "not_found"
 
     async def _tap_request_invitation_from_anchor(self, anchor: dict) -> None:
         """
@@ -694,6 +705,72 @@ class PhoneRegistrationBot:
             f"score={best['score']} text='{best['visible_text'][:40]}'"
         )
         return best
+
+    def _find_cta_below_anchor(self, xml: str, anchor: dict) -> Optional[dict]:
+        """
+        Tìm node clickable lớn nhất nằm ngay dưới invitation anchor.
+        Dùng khi text của nút vàng không lộ rõ trong XML nhưng bounds/button vẫn có.
+        """
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return None
+        screen_w = max(node["x2"] for node in nodes)
+        screen_h = max(node["y2"] for node in nodes)
+
+        candidates = []
+        for node in nodes:
+            if not node["enabled"] or not node["clickable"]:
+                continue
+
+            x_pct = (node["cx"] / max(1, screen_w)) * 100.0
+            y_pct = (node["cy"] / max(1, screen_h)) * 100.0
+            width_pct = (node["width"] / max(1, screen_w)) * 100.0
+            height_pct = (node["height"] / max(1, screen_h)) * 100.0
+
+            if node["y1"] <= anchor["y2"]:
+                continue
+            if node["y1"] - anchor["y2"] > int(screen_h * 0.22):
+                continue
+            if not (20.0 <= x_pct <= 80.0):
+                continue
+            if width_pct < 45.0:
+                continue
+            if not (2.0 <= height_pct <= 10.0):
+                continue
+
+            score = 100.0
+            if 78.0 <= width_pct <= 96.0:
+                score += 35.0
+            elif width_pct >= 60.0:
+                score += 20.0
+            if 78.0 <= y_pct <= 92.0:
+                score += 30.0
+            elif 70.0 <= y_pct <= 95.0:
+                score += 15.0
+            distance = node["y1"] - anchor["y2"]
+            score += max(0.0, 25.0 - (distance / max(1, screen_h)) * 100.0)
+            if "button" in node["class"].lower():
+                score += 20.0
+
+            candidates.append({
+                **node,
+                "score": round(score, 2),
+                "x_pct": round(x_pct, 2),
+                "y_pct": round(y_pct, 2),
+                "width_pct": round(width_pct, 2),
+                "height_pct": round(height_pct, 2),
+            })
+
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        preview = [
+            f"({c['cx']},{c['cy']}) score={c['score']} y={c['y_pct']} width={c['width_pct']} class={c['class']}"
+            for c in candidates[:3]
+        ]
+        log.info(f"[Phone:{self.device}] CTA dưới anchor candidates: {' | '.join(preview)}")
+        best = candidates[0]
+        return best if best["score"] >= 120.0 else None
 
     def _find_request_invitation_candidate(self, xml: str) -> Optional[dict]:
         """
@@ -894,6 +971,36 @@ class PhoneRegistrationBot:
 
         return False, "Không xác nhận được form/account flow thật sau khi bấm CTA", xml
 
+    async def _open_request_invitation_flow(self) -> tuple[bool, str, Optional[str]]:
+        """
+        Cố gắng mở sign-in/create-account flow từ CTA invitation.
+        Nếu click nhầm thì back lại và thử lại chiến lược tiếp theo.
+        """
+        last_reason = "Không mở được request invitation flow"
+        for attempt in range(3):
+            before_xml = await self.screen_reader.dump_ui(self.device)
+            tapped, tap_mode = await self._tap_request_invitation_cta()
+            if not tapped:
+                return False, "Không tìm thấy nút Request Invitation trên trang sản phẩm", before_xml
+
+            verify_ok, verify_reason, verify_xml = await self._verify_post_request_invitation_state()
+            log.info(
+                f"[Phone:{self.device}] Post-CTA verify (attempt {attempt + 1}/3, mode={tap_mode}): {verify_reason}"
+            )
+            if verify_ok:
+                return True, verify_reason, verify_xml
+
+            last_reason = verify_reason
+            await self._screenshot_step(f"step2_wrong_click_attempt_{attempt + 1}")
+            log.warning(
+                f"[Phone:{self.device}] Click CTA có thể sai nhánh (mode={tap_mode}), back lại product page để thử lại"
+            )
+            await self.xw.press_back(self.device)
+            await self._delay(0.8, 1.3)
+            await self.screen_reader.wait_for_ui_change(self.device, verify_xml or before_xml, timeout=5.0, poll_interval=0.5)
+
+        return False, last_reason, None
+
     async def _device_point_to_percent(self, x: int, y: int) -> tuple[float, float]:
         """Chuyển tọa độ pixel thật thành % màn hình để tái dùng helper hiện có."""
         w, h = await self.get_device_resolution()
@@ -1070,19 +1177,8 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] Step 2 – Tìm đúng CTA vàng '招待をリクエストする' trên product page...")
-            tapped_request = await self._tap_request_invitation_cta()
-            if not tapped_request:
-                result["note"] = "Không tìm thấy nút Request Invitation trên trang sản phẩm"
-                await self._screenshot_step("step2_FAILED_request_invitation_not_found")
-                return result
-
-            # Đợi flow đăng nhập / tạo account xuất hiện sau click CTA
-            login_ok, login_reason, login_xml = await self._verify_post_request_invitation_state()
-            log.info(f"[Phone:{self.device}] Post-CTA verify: {login_reason}")
+            login_ok, login_reason, login_xml = await self._open_request_invitation_flow()
             if not login_ok:
-                await self._screenshot_step("step2_post_cta_unexpected_state")
-                await self.xw.press_back(self.device)
-                await self._delay(0.8, 1.2)
                 result["note"] = login_reason
                 await self._screenshot_step("step2_FAILED_login_form_not_found")
                 return result
