@@ -106,6 +106,37 @@
   - `RegisterBot_Package/src/web_server.py`
   - client now prefers `screenFile` when `savePath` is provided, falls back to `screen`, and waits briefly for file materialization
 
+## 2026-07-01 - XiaoWei Windows JP diagnostics pass
+
+- Re-ran `python main.py --diagnose-xiaowei` on the Japan Windows machine after the non-blocking screenshot adjustment.
+- Result:
+  - `overall_success=true`
+  - `get_devices`, `adb_wm_size`, `adb_pm_list_packages`, `uiautomator_dump`, `ui_text_probe` all passed
+  - `screenshot` still did not materialize a local file and is now treated as a warning instead of a hard failure
+- Practical conclusion:
+  - Phase 3 core smoke test is good enough to proceed to runtime interaction checks and one real registration flow
+
+## 2026-07-01 - Amazon product-page false-negative fix for XiaoWei flow
+
+- Runtime test on the Japan Windows machine reached a real Amazon JP product page but the bot stopped at Step 1 with:
+  - `Wrong page detected hoặc không xác nhận được product page Amazon`
+- Evidence from the shared screenshot showed the phone was already on a valid Amazon product page:
+  - Amazon search bar visible
+  - product title visible
+  - price marker `¥7,216`
+  - Amazon benefit text such as `Amazon Mastercard`
+- Root cause in repo:
+  - `RegisterBot_Package/src/phone_bot.py`
+  - `verify_expected_product_page()` still depended too heavily on first-fold CTA visibility
+  - `screen_reader.find_best_element()` had a `preferred_region` bug comparing percent regions against pixel coordinates
+- Fix implemented:
+  - widened Amazon product-page fingerprint detection with host + price + cart/benefit/product markers
+  - wrong-domain detection now ignores cases where XML already contains strong Amazon indicators
+  - fixed `preferred_region` scoring to convert node coordinates into screen percentages before boosting
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py RegisterBot_Package/src/screen_reader.py`
+  - pass
+
 ## Mục tiêu
 
 Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user hoặc AI Agent.

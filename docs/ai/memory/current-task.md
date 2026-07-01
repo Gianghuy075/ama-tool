@@ -34,13 +34,17 @@ in_progress
 - `cd RegisterBot_Package && python3 main.py --diagnose-xiaowei`
   - pass tới lớp CLI/reporting
   - fail đúng chỗ connect `ws://127.0.0.1:22222/` trên máy Mac dev vì không có XiaoWei runtime local
+- `cd RegisterBot_Package && python main.py --diagnose-xiaowei` trên máy Windows Nhật
+  - `overall_success=true`
+  - pass: `get_devices`, `adb_wm_size`, `adb_pm_list_packages`, `uiautomator_dump`, `ui_text_probe`
+  - screenshot vẫn không tạo file local nhưng đã hạ xuống warning non-blocking
 
 ## Next action
 
-- Chạy tiếp `Phase 3` trên máy Windows Nhật có XiaoWei runtime thật
+- Tiếp tục `Phase 5` trên máy Windows Nhật có XiaoWei runtime thật
 - Ưu tiên thứ tự:
-  - dashboard test connection
-  - `python main.py --diagnose-xiaowei`
-  - runtime verify `adb`
+  - retest fix false-negative `wrong_page_detected` trên Amazon product page thật
+  - xác nhận bot qua được `Step 1` và tới `Request Invitation`
   - runtime verify app open/start
+  - runtime verify tap/swipe/type_text
   - end-to-end 1 account

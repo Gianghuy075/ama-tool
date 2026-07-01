@@ -132,12 +132,28 @@ class PhoneRegistrationBot:
             return None
 
         xml_lower = xml.lower()
+        amazon_indicators = [
+            "amazon.co.jp",
+            "www.amazon.co.jp",
+            "amazon",
+            "ショッピングカート",
+            "カートに入れる",
+            "ほしい物リスト",
+            "prime",
+            "ポイント",
+            "配送料無料",
+            "amazon mastercard",
+        ]
         domains = set(re.findall(r"[a-z0-9.-]+\.[a-z]{2,}", xml_lower))
         # Loại domain hệ thống/phổ biến không hữu ích
-        ignored = {"amazon", "android", "google", "gstatic", "doubleclick.net"}
+        ignored = {"amazon", "amazon.co.jp", "www.amazon.co.jp", "android", "google", "gstatic", "doubleclick.net"}
         candidates = [d for d in domains if not any(d == ig or d.endswith("." + ig) for ig in ignored)]
 
         if expected_host and expected_host in candidates:
+            return None
+
+        # Nếu XML đã mang fingerprint rất rõ của product page Amazon thì không đánh dấu wrong-domain nữa.
+        if any(marker in xml_lower for marker in amazon_indicators) or "￥" in xml or "¥" in xml:
             return None
 
         for domain in candidates:
@@ -155,16 +171,35 @@ class PhoneRegistrationBot:
         Verify cơ bản rằng bot đang ở product page Amazon JP đúng hướng.
         Return: (success, reason, xml)
         """
-        product_markers = [
+        amazon_host_markers = [
+            "amazon.co.jp",
+            "www.amazon.co.jp",
+            "amazon",
+        ]
+        strong_markers = [
             "招待をリクエストする",
             "招待をリクエスト",
             "Request Invitation",
             "Invitation",
-            "amazon.co.jp",
-            "www.amazon.co.jp",
+        ]
+        product_page_markers = [
+            "カートに入れる",
+            "ショッピングカート",
+            "prime",
+            "ポイント",
+            "ほしい物リスト",
+            "在庫",
+            "配送料無料",
+            "Amazon Mastercard",
+            "商品の情報",
+            "この商品について",
+            "評価",
+            "レビュー",
+            "検索",
+            "検索する",
         ]
         xml = await self._wait_for_state(
-            product_markers,
+            strong_markers + amazon_host_markers + product_page_markers,
             timeout=timeout,
             step_name="step1_wait_product_page",
         )
@@ -179,11 +214,20 @@ class PhoneRegistrationBot:
             xml_lower = xml.lower()
             if expected_host and expected_host in xml_lower:
                 return True, f"Xác nhận host hiển thị đúng: {expected_host}", xml
-            if any(marker.lower() in xml_lower for marker in product_markers[:4]):
+            if any(marker in xml_lower for marker in amazon_host_markers):
+                if any(marker.lower() in xml_lower for marker in product_page_markers):
+                    return True, "Tìm thấy host/fingerprint Amazon product page", xml
+                if "￥" in xml or "¥" in xml:
+                    return True, "Tìm thấy host Amazon cùng marker giá sản phẩm", xml
+            if any(marker.lower() in xml_lower for marker in strong_markers[:4]):
                 reason = "Tìm thấy CTA/product marker của Amazon"
                 if expected_asin:
                     reason += f" (ASIN kỳ vọng: {expected_asin})"
                 return True, reason, xml
+            if any(marker.lower() in xml_lower for marker in product_page_markers):
+                return True, "Tìm thấy fingerprint product page Amazon (cart/price/benefit markers)", xml
+            if "￥" in xml or "¥" in xml:
+                return True, "Tìm thấy price marker trên product page", xml
 
         return False, "Không thấy fingerprint đáng tin của product page Amazon", xml
 

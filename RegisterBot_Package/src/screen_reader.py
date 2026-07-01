@@ -158,6 +158,8 @@ class ScreenReader:
         nodes = self._parse_nodes(xml_str)
         if not nodes:
             return None
+        screen_w = max(node["x2"] for node in nodes)
+        screen_h = max(node["y2"] for node in nodes)
 
         best = None
         best_score = -1.0
@@ -206,9 +208,11 @@ class ScreenReader:
 
             if preferred_region:
                 x1_pct, x2_pct, y1_pct, y2_pct = preferred_region
+                x_pct = (node["cx"] / max(1, screen_w)) * 100.0
+                y_pct = (node["cy"] / max(1, screen_h)) * 100.0
                 if (
-                    x1_pct <= node["cx"] <= x2_pct and
-                    y1_pct <= node["cy"] <= y2_pct
+                    x1_pct <= x_pct <= x2_pct and
+                    y1_pct <= y_pct <= y2_pct
                 ):
                     score += 15.0
 

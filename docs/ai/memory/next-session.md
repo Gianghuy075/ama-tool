@@ -23,15 +23,16 @@
 
 ## Recommended next step
 
-1. Phase 3 is partially complete with real Windows JP runtime evidence:
-   - `get_devices`, `adb`, `uiautomator dump` already passed
-2. Pull the latest fix for screenshot handling on the Japan Windows machine.
-3. Re-run:
-   - `cd RegisterBot_Package`
-   - `python main.py --diagnose-xiaowei`
-4. If screenshot also passes:
-   - move to app-open/runtime verification
-   - then run one full end-to-end registration account
+1. Pull the latest repo state on the Japan Windows machine because there is a new Step-1 false-negative fix:
+   - broader Amazon product-page fingerprint
+   - `preferred_region` scoring bug fix
+2. Re-run one real Amazon registration account on XiaoWei.
+3. Confirm specifically:
+   - bot no longer stops at `Wrong page detected...` when already on a real Amazon product page
+   - bot can continue from Step 1 to `Request Invitation`
+4. If Step 1 passes:
+   - continue evaluating click/input stability on the next steps
+   - then move toward full end-to-end verification
 
 ## Bắt đầu từ đâu?
 
@@ -51,6 +52,7 @@
 
 - Tiếp tục plan XiaoWei tại `docs/ai/plans/xiaowei-direct-integration-plan.md`
 - Ưu tiên:
-  - xác nhận screenshot pass với patch `screenFile` fallback `screen`
+  - retest fix `wrong_page_detected` false-negative trên Amazon product page thật
+  - xác nhận bước `Request Invitation` sau khi Step 1 pass
   - verify `startApk` / app-open runtime thật
   - chạy 1 account end-to-end

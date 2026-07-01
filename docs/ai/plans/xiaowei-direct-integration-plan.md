@@ -45,7 +45,7 @@ Mục tiêu vận hành:
 | Phase 2 | Chuẩn bị config/runtime cho XiaoWei | In progress | 100% |
 | Phase 3 | Smoke test backend XiaoWei | In progress | 85% |
 | Phase 4 | Xác minh `uiautomator dump` + ScreenReader | In progress | 70% |
-| Phase 5 | Kiểm thử flow bot từng phần | In progress | 10% |
+| Phase 5 | Kiểm thử flow bot từng phần | In progress | 20% |
 | Phase 6 | End-to-end test | Chưa bắt đầu runtime | 0% |
 | Phase 7 | Hardening | In progress | 35% |
 | Phase 8 | Chuyển đổi kiến trúc vận hành | Chưa bắt đầu | 0% |
@@ -53,7 +53,7 @@ Mục tiêu vận hành:
 ## Trạng thái hiện tại
 
 - `Current phase`: `Phase 5`
-- `Overall progress`: khoảng `76%`
+- `Overall progress`: khoảng `78%`
 - `Đã xong trong repo`:
   - adapter XiaoWei đã được gia cố
   - có UI test connection
@@ -67,6 +67,7 @@ Mục tiêu vận hành:
   - endpoint handbook tree đã xác định được nhưng site XiaoWei phản hồi không ổn định khi truy vấn sâu
   - screenshot-to-file của XiaoWei runtime trên máy Nhật chưa ghi file local dù API trả `SUCCESS`
   - `tap/swipe/type_text/open_app` và end-to-end registration vẫn cần runtime evidence
+  - flow Amazon thật hiện đã vào đúng product page nhưng vẫn cần retest sau khi nới `product page fingerprint` để tránh false wrong-page
 
 ## Bối cảnh kỹ thuật đã xác nhận
 
@@ -366,7 +367,7 @@ Mục tiêu:
   - [x] text đặc trưng của trang sản phẩm
   - [x] text đặc trưng của CTA như `招待をリクエストする`
 - [ ] Không dựa vào 1 text đơn lẻ
-- [ ] Hỗ trợ nhiều pattern cho trang sản phẩm Amazon JP
+- [x] Hỗ trợ nhiều pattern cho trang sản phẩm Amazon JP
 
 #### A4. Cơ chế phát hiện sai trang
 
@@ -412,7 +413,7 @@ Mục tiêu:
 - [x] Chấm điểm node theo mức khớp text exact/partial
 - [x] Ưu tiên node clickable/enabled
 - [x] Ưu tiên node có bounds hợp lý
-- [ ] Ưu tiên node nằm ở vùng màn hình hợp logic với flow
+- [x] Ưu tiên node nằm ở vùng màn hình hợp logic với flow
 - [x] Khi có nhiều node, chọn node score cao nhất thay vì node đầu tiên
 
 #### B3. Anchor-based targeting
@@ -490,6 +491,23 @@ Mục tiêu:
 - [ ] retry budget theo từng step
 - [ ] chuẩn hóa note/error code
 - [ ] screenshot + XML evidence đồng bộ theo step fail
+
+### Ghi nhận runtime mới nhất
+
+- 2026-07-01:
+  - máy Windows Nhật đã xác nhận CLI/UI diagnostics pass với XiaoWei runtime
+  - test flow Amazon thật cho thấy bot đã vào đúng product page Amazon JP
+  - lỗi mới phát hiện:
+    - `verify_expected_product_page()` vẫn quá chặt, có thể fail dù phone đã đứng ở product page thật
+    - `preferred_region` trong scoring selector trước đó đang so sánh `%` với `pixel`, làm giảm độ ổn định chọn phần tử
+  - fix repo đã bổ sung:
+    - nới fingerprint product page Amazon bằng host + price + cart/benefit/product markers
+    - không kết luận `wrong_page` nếu XML đã có fingerprint Amazon rõ
+    - sửa boost `preferred_region` sang đúng hệ quy chiếu phần trăm màn hình
+  - việc cần retest tiếp theo:
+    - kéo code mới trên máy Nhật
+    - chạy lại 1 account thật
+    - xác nhận bot qua được `Step 1` và tiếp tục tới `Request Invitation`
 
 #### Wave 4 - Hardening production
 
