@@ -73,3 +73,19 @@
   - verify `startApk` / `open_app` / `open_url` / `tap` / `swipe` / `type_text`
   - chạy được 1 account thật với backend XiaoWei
   - sau đó mới quay lại `Request Invitation` + sign-in hardening
+
+## Update 2026-07-02 Step 2 CTA
+
+- Đã sửa lại `RegisterBot_Package/src/phone_bot.py` theo hướng:
+  - bỏ `anchor fallback` click mù
+  - bỏ `revealed bbox fallback` click quá thấp
+  - giữ `micro-scroll` rất nhẹ cho first-fold CTA
+  - nếu vẫn chỉ có CTA text nhưng geometry rác thì tap trong dải `first-fold viewport` hẹp ngay dưới block ảnh/giá
+- Mục tiêu của patch này:
+  - không click nhầm vào ảnh/info/help page nữa
+  - không scroll sâu quá mất CTA
+  - ưu tiên nhích xuống 10-20% chiều cao màn hình rồi tap trong vùng CTA thực tế
+- Cần user test lại trên máy Windows JP để xác nhận:
+  - log có `CTA micro-scroll step=1`
+  - sau đó nếu geometry vẫn rác thì log có `first-fold viewport`
+  - bot có vào đúng sign-in flow hay không

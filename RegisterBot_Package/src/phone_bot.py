@@ -799,9 +799,9 @@ class PhoneRegistrationBot:
         Mục tiêu là không vượt quá nút vàng ngay dưới ảnh.
         """
         swipe_plan = [
-            (0.50, 0.78, 0.50, 0.72, 240),
-            (0.50, 0.76, 0.50, 0.69, 260),
-            (0.50, 0.74, 0.50, 0.66, 280),
+            (0.50, 0.79, 0.50, 0.71, 240),
+            (0.50, 0.78, 0.50, 0.68, 260),
+            (0.50, 0.76, 0.50, 0.64, 280),
         ]
         x1, y1, x2, y2, duration = swipe_plan[min(attempt, len(swipe_plan) - 1)]
         log.info(
@@ -827,6 +827,24 @@ class PhoneRegistrationBot:
                 if not self._has_valid_node_geometry(node):
                     return True
         return False
+
+    async def _tap_first_fold_cta_viewport(self, attempt: int) -> None:
+        """
+        Fallback cuối cùng cho step CTA:
+        sau khi đã micro-scroll rất nhẹ và XML vẫn chỉ lộ text nhưng geometry rác,
+        tap vào dải CTA first-fold hẹp ngay dưới block ảnh/giá thay vì click mù
+        ở vùng quá rộng hoặc quá thấp.
+        """
+        tap_plan = [
+            (24.0, 76.0, 61.0, 67.5, "First-fold CTA viewport A"),
+            (24.0, 76.0, 63.0, 69.5, "First-fold CTA viewport B"),
+        ]
+        x_min, x_max, y_min, y_max, description = tap_plan[min(attempt, len(tap_plan) - 1)]
+        log.warning(
+            f"[Phone:{self.device}] CTA text vẫn hiện nhưng geometry rác; "
+            f"fallback theo first-fold viewport hẹp: x={x_min:.1f}-{x_max:.1f} y={y_min:.1f}-{y_max:.1f}"
+        )
+        await self._tap_bbox_pct(x_min, x_max, y_min, y_max, description)
 
     async def _tap_request_invitation_cta_from_xml(self, initial_xml: Optional[str]) -> tuple[bool, str]:
         """
@@ -895,27 +913,14 @@ class PhoneRegistrationBot:
                     await self._delay()
                     return True, "anchor_button_candidate"
 
-                if not self._has_valid_node_geometry(anchor, min_width=120, min_height=20):
-                    log.warning(
-                        f"[Phone:{self.device}] Bỏ qua anchor fallback vì anchor geometry không hợp lệ: "
-                        f"bounds={anchor.get('raw_bounds')} size=({anchor.get('width')},{anchor.get('height')})"
-                    )
-                else:
-                    log.warning(
-                        f"[Phone:{self.device}] Đã thấy invitation anchor '{anchor.get('visible_text', '')[:40]}' "
-                        "nhưng chưa có bounds CTA đáng tin; fallback tap theo anchor, không scroll tiếp"
-                    )
-                    await self._tap_request_invitation_from_anchor(anchor)
-                    return True, "anchor_fallback"
+                log.warning(
+                    f"[Phone:{self.device}] Đã thấy invitation anchor '{anchor.get('visible_text', '')[:40]}' "
+                    "nhưng chưa có bounds CTA đủ tin cậy; bỏ anchor fallback để tránh click nhầm"
+                )
 
             if attempt >= 1 and self._has_request_invitation_text_without_geometry(xml):
-                log.warning(
-                    f"[Phone:{self.device}] CTA text vẫn hiện kiểu geometry rác sau khi đã micro-scroll; "
-                    "thử bbox fallback ở vùng dưới block sản phẩm"
-                )
-                await self._tap_bbox_pct(18, 82, 72, 84, "Revealed CTA fallback")
-                await self._delay()
-                return True, "revealed_bbox_fallback"
+                await self._tap_first_fold_cta_viewport(attempt - 1)
+                return True, "first_fold_viewport_fallback"
 
             if attempt < 3:
                 log.info(
