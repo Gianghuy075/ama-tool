@@ -10,6 +10,7 @@ Không cần thêm dependency — chỉ dùng stdlib (xml.etree, re, asyncio).
 
 import asyncio
 import logging
+import math
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -90,6 +91,188 @@ class ScreenReader:
             "height": y2 - y1,
         }
 
+    def _parse_nodes(self, xml_str: str) -> list[dict]:
+        """Parse tất cả node trong XML thành list dict có attrs + bounds."""
+        if not xml_str:
+            return []
+        try:
+            root = ET.fromstring(xml_str)
+        except ET.ParseError as e:
+            log.warning(f"[ScreenReader] XML parse error in _parse_nodes: {e}")
+            return []
+
+        nodes = []
+        for node in root.iter("node"):
+            bounds = self.parse_bounds(node.get("bounds", ""))
+            if not bounds:
+                continue
+            nodes.append({
+                **bounds,
+                "text": node.get("text", "") or "",
+                "content_desc": node.get("content-desc", "") or "",
+                "resource_id": node.get("resource-id", "") or "",
+                "class": node.get("class", "") or "",
+                "package": node.get("package", "") or "",
+                "clickable": node.get("clickable") == "true",
+                "enabled": node.get("enabled") != "false",
+                "focusable": node.get("focusable") == "true",
+                "focused": node.get("focused") == "true",
+                "selected": node.get("selected") == "true",
+                "password": node.get("password") == "true",
+                "raw_bounds": node.get("bounds", ""),
+            })
+        return nodes
+
+    def _text_match_score(self, value: str, patterns: list[str], partial: bool = True) -> float:
+        value_l = (value or "").strip().lower()
+        if not value_l or not patterns:
+            return 0.0
+        score = 0.0
+        for pattern in patterns:
+            p = pattern.strip().lower()
+            if not p:
+                continue
+            if value_l == p:
+                score = max(score, 100.0)
+            elif partial and p in value_l:
+                ratio = min(1.0, len(p) / max(1, len(value_l)))
+                score = max(score, 70.0 + ratio * 20.0)
+        return score
+
+    def find_best_element(
+        self,
+        xml_str: str,
+        texts: list[str] = None,
+        resource_ids: list[str] = None,
+        classes: list[str] = None,
+        clickable: Optional[bool] = None,
+        enabled: Optional[bool] = True,
+        focusable: Optional[bool] = None,
+        partial: bool = True,
+        preferred_region: tuple[float, float, float, float] = None,
+    ) -> Optional[dict]:
+        """
+        Tìm node tốt nhất theo scoring thay vì lấy node đầu tiên.
+        preferred_region: (x1_pct, x2_pct, y1_pct, y2_pct) để boost ứng viên nằm đúng vùng.
+        """
+        nodes = self._parse_nodes(xml_str)
+        if not nodes:
+            return None
+
+        best = None
+        best_score = -1.0
+        for node in nodes:
+            if enabled is not None and node["enabled"] != enabled:
+                continue
+            if clickable is not None and node["clickable"] != clickable:
+                continue
+            if focusable is not None and node["focusable"] != focusable:
+                continue
+
+            score = 0.0
+            score += self._text_match_score(node["text"], texts or [], partial=partial)
+            score += self._text_match_score(node["content_desc"], texts or [], partial=partial) * 0.9
+
+            if resource_ids:
+                rid = node["resource_id"].lower()
+                for pattern in resource_ids:
+                    p = pattern.lower()
+                    if rid == p:
+                        score += 90.0
+                    elif p in rid:
+                        score += 60.0
+
+            if classes:
+                cls = node["class"].lower()
+                for pattern in classes:
+                    p = pattern.lower()
+                    if cls == p:
+                        score += 35.0
+                    elif p in cls:
+                        score += 20.0
+
+            if node["clickable"]:
+                score += 12.0
+            if node["enabled"]:
+                score += 8.0
+            if node["focusable"]:
+                score += 8.0
+            if node["focused"]:
+                score += 5.0
+
+            # Penalty cho node quá nhỏ
+            if node["width"] < 20 or node["height"] < 20:
+                score -= 20.0
+
+            if preferred_region:
+                x1_pct, x2_pct, y1_pct, y2_pct = preferred_region
+                if (
+                    x1_pct <= node["cx"] <= x2_pct and
+                    y1_pct <= node["cy"] <= y2_pct
+                ):
+                    score += 15.0
+
+            if score > best_score:
+                best_score = score
+                best = {**node, "score": round(score, 2)}
+
+        return best if best_score > 0 else None
+
+    def find_input_near_label(
+        self,
+        xml_str: str,
+        label_texts: list[str],
+        max_distance: float = 500.0,
+    ) -> Optional[dict]:
+        """
+        Tìm EditText tốt nhất gần label. Dùng cho email/name/password fields.
+        """
+        nodes = self._parse_nodes(xml_str)
+        if not nodes:
+            return None
+
+        label = self.find_best_element(
+            xml_str,
+            texts=label_texts,
+            clickable=None,
+            enabled=True,
+            partial=True,
+        )
+        if not label:
+            return None
+
+        best = None
+        best_score = -1.0
+        for node in nodes:
+            cls = node["class"].lower()
+            if "edittext" not in cls:
+                continue
+            if not node["enabled"]:
+                continue
+
+            dy = node["cy"] - label["cy"]
+            dx = abs(node["cx"] - label["cx"])
+            distance = math.hypot(dx, max(0, dy))
+
+            score = 0.0
+            if dy >= -30:
+                score += 40.0
+            else:
+                score -= 30.0
+            score += max(0.0, 40.0 - min(distance, max_distance) / max_distance * 40.0)
+            if node["focusable"]:
+                score += 10.0
+            if node["clickable"]:
+                score += 8.0
+            if dx < 150:
+                score += 8.0
+
+            if score > best_score:
+                best_score = score
+                best = {**node, "score": round(score, 2), "anchor_text": label["text"] or label["content_desc"]}
+
+        return best
+
     def find_element_by_text(self, xml_str: str, text: str, partial: bool = True) -> Optional[dict]:
         """
         Tìm element đầu tiên có text hoặc content-desc matching.
@@ -149,12 +332,7 @@ class ScreenReader:
         Tìm element đầu tiên matching bất kỳ text nào trong list.
         Trả về element đầu tiên tìm được.
         """
-        for text in texts:
-            elem = self.find_element_by_text(xml_str, text)
-            if elem:
-                log.debug(f"[ScreenReader] find_any_element: matched '{text}'")
-                return elem
-        return None
+        return self.find_best_element(xml_str, texts=texts, partial=True)
 
     def get_focused_field_text(self, xml_str: str) -> Optional[str]:
         """

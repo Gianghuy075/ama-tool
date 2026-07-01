@@ -12,6 +12,7 @@ import string
 import time
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
 
 from src.screen_reader import ScreenReader
 from src.xiaowei_client import XiaoWeiClient
@@ -90,6 +91,101 @@ class PhoneRegistrationBot:
     def _generate_random_token(self, length: int = 20) -> str:
         """Tạo token ngẫu nhiên."""
         return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+    def _extract_asin(self, product_url: str) -> str:
+        """Lấy ASIN từ URL Amazon nếu có."""
+        match = re.search(r"/dp/([A-Z0-9]{10})(?:[/?]|$)", product_url, re.IGNORECASE)
+        if match:
+            return match.group(1).upper()
+        return ""
+
+    def _validate_product_url(self) -> tuple[bool, str, str, str]:
+        """
+        Validate product_url cho flow Amazon JP.
+        Return: (is_valid, message, expected_host, expected_asin)
+        """
+        if not self.product_url or not self.product_url.strip():
+            return False, "Chưa cung cấp link sản phẩm Amazon (product_url)", "", ""
+
+        try:
+            parsed = urlparse(self.product_url.strip())
+        except Exception as e:
+            return False, f"Không parse được product_url: {e}", "", ""
+
+        host = (parsed.netloc or "").lower()
+        asin = self._extract_asin(self.product_url)
+
+        if parsed.scheme not in {"http", "https"}:
+            return False, f"product_url có scheme không hợp lệ: {parsed.scheme}", host, asin
+        if "amazon.co.jp" not in host:
+            return False, f"product_url không thuộc amazon.co.jp: {host}", host, asin
+        if not asin:
+            return False, "product_url không chứa ASIN dạng /dp/<ASIN>", host, asin
+
+        return True, "OK", host, asin
+
+    def _detect_visible_wrong_domain(self, xml: str, expected_host: str) -> Optional[str]:
+        """
+        Tìm domain hiển thị trên UI XML. Nếu thấy domain khác expected_host thì coi là dấu hiệu vào sai trang.
+        """
+        if not xml:
+            return None
+
+        xml_lower = xml.lower()
+        domains = set(re.findall(r"[a-z0-9.-]+\.[a-z]{2,}", xml_lower))
+        # Loại domain hệ thống/phổ biến không hữu ích
+        ignored = {"amazon", "android", "google", "gstatic", "doubleclick.net"}
+        candidates = [d for d in domains if not any(d == ig or d.endswith("." + ig) for ig in ignored)]
+
+        if expected_host and expected_host in candidates:
+            return None
+
+        for domain in candidates:
+            if expected_host and expected_host not in domain:
+                return domain
+        return None
+
+    async def _verify_expected_product_page(
+        self,
+        expected_host: str,
+        expected_asin: str,
+        timeout: float = 10.0,
+    ) -> tuple[bool, str, Optional[str]]:
+        """
+        Verify cơ bản rằng bot đang ở product page Amazon JP đúng hướng.
+        Return: (success, reason, xml)
+        """
+        product_markers = [
+            "招待をリクエストする",
+            "招待をリクエスト",
+            "Request Invitation",
+            "Invitation",
+            "amazon.co.jp",
+            "www.amazon.co.jp",
+        ]
+        xml = await self._wait_for_state(
+            product_markers,
+            timeout=timeout,
+            step_name="step1_wait_product_page",
+        )
+        if not xml:
+            xml = await self.screen_reader.dump_ui(self.device)
+
+        wrong_domain = self._detect_visible_wrong_domain(xml or "", expected_host)
+        if wrong_domain:
+            return False, f"Phát hiện domain lạ trên UI: {wrong_domain}", xml
+
+        if xml:
+            xml_lower = xml.lower()
+            if expected_host and expected_host in xml_lower:
+                return True, f"Xác nhận host hiển thị đúng: {expected_host}", xml
+            if any(marker.lower() in xml_lower for marker in product_markers[:4]):
+                reason = "Tìm thấy CTA/product marker của Amazon"
+                if expected_asin:
+                    reason += f" (ASIN kỳ vọng: {expected_asin})"
+                return True, reason, xml
+
+        return False, "Không thấy fingerprint đáng tin của product page Amazon", xml
 
     # ── Core: Tap and type helpers ────────────────────────────────────
 
@@ -338,6 +434,101 @@ class PhoneRegistrationBot:
         log.error(f"[Phone:{self.device}] Không tìm thấy '{description or search_texts[0]}' sau {max_scrolls} lần cuộn")
         return False
 
+    async def _tap_best_element_with_scroll_search(
+        self,
+        description: str = "",
+        max_scrolls: int = 3,
+        texts: list[str] = None,
+        resource_ids: list[str] = None,
+        classes: list[str] = None,
+        clickable: Optional[bool] = True,
+        focusable: Optional[bool] = None,
+        preferred_region: tuple[float, float, float, float] = None,
+    ) -> bool:
+        """
+        Tìm node tốt nhất bằng scoring, cuộn từng nhịp ngắn nếu chưa thấy.
+        """
+        for attempt in range(max_scrolls + 1):
+            xml = await self.screen_reader.dump_ui(self.device)
+            if xml:
+                elem = self.screen_reader.find_best_element(
+                    xml,
+                    texts=texts,
+                    resource_ids=resource_ids,
+                    classes=classes,
+                    clickable=clickable,
+                    focusable=focusable,
+                    preferred_region=preferred_region,
+                )
+                if elem:
+                    log.info(
+                        f"[Phone:{self.device}] Tìm thấy '{description or (texts or ['element'])[0]}' theo scoring "
+                        f"sau {attempt} lần cuộn tại ({elem['cx']},{elem['cy']}) score={elem.get('score')}"
+                    )
+                    await self.xw.device_click(self.device, elem["cx"], elem["cy"])
+                    await self._delay()
+                    return True
+
+            if attempt < max_scrolls:
+                log.info(
+                    f"[Phone:{self.device}] Chưa thấy '{description or (texts or ['element'])[0]}', cuộn thêm 1 nhịp "
+                    f"(attempt {attempt + 1}/{max_scrolls})"
+                )
+                await self._scroll_down(1)
+                await self._delay(0.8, 1.5)
+
+        log.error(f"[Phone:{self.device}] Không tìm thấy '{description or (texts or ['element'])[0]}' sau {max_scrolls} lần cuộn")
+        return False
+
+    async def _type_into_labeled_field(
+        self,
+        text: str,
+        label_texts: list[str],
+        description: str = "",
+        is_password: bool = False,
+        fallback_bbox: tuple[float, float, float, float] = None,
+    ) -> bool:
+        """
+        Tìm ô input gần label trong UI XML, focus và nhập text. Có fallback bbox nếu cần.
+        """
+        xml = await self.screen_reader.dump_ui(self.device)
+        field = self.screen_reader.find_input_near_label(xml or "", label_texts) if xml else None
+        if field:
+            log.info(
+                f"[Phone:{self.device}] Tìm thấy field '{description or label_texts[0]}' gần label "
+                f"'{field.get('anchor_text', '')}' tại ({field['cx']},{field['cy']}) score={field.get('score')}"
+            )
+            x_pct, y_pct = await self._device_point_to_percent(field["cx"], field["cy"])
+            return await self._type_and_verify(
+                text,
+                max(0.0, x_pct - 3.0), min(100.0, x_pct + 3.0),
+                max(0.0, y_pct - 2.0), min(100.0, y_pct + 2.0),
+                description=description or label_texts[0],
+                is_password=is_password,
+            )
+
+        if fallback_bbox:
+            log.warning(
+                f"[Phone:{self.device}] Không tìm thấy field theo label '{description or label_texts[0]}', "
+                "fallback sang bbox cũ"
+            )
+            return await self._type_and_verify(
+                text,
+                fallback_bbox[0], fallback_bbox[1], fallback_bbox[2], fallback_bbox[3],
+                description=description or label_texts[0],
+                is_password=is_password,
+            )
+
+        log.error(f"[Phone:{self.device}] Không tìm thấy field '{description or label_texts[0]}'")
+        return False
+
+    async def _device_point_to_percent(self, x: int, y: int) -> tuple[float, float]:
+        """Chuyển tọa độ pixel thật thành % màn hình để tái dùng helper hiện có."""
+        w, h = await self.get_device_resolution()
+        if w <= 0 or h <= 0:
+            return 50.0, 50.0
+        return (x / w) * 100.0, (y / h) * 100.0
+
     async def _type_and_verify(
         self,
         text: str,
@@ -456,22 +647,45 @@ class PhoneRegistrationBot:
             await self.xw.kill_browser(self.device, chosen_browser)
             await asyncio.sleep(1.0)
 
-            # Mở trình duyệt với URL sản phẩm Amazon
-            if not self.product_url:
-                result["note"] = "Chưa cung cấp link sản phẩm Amazon (product_url)"
+            is_valid_product_url, validate_msg, expected_host, expected_asin = self._validate_product_url()
+            if not is_valid_product_url:
+                result["note"] = validate_msg
                 return result
 
-            # Randomize URL tracking tokens cho mỗi tài khoản (anti-detection)
-            unique_url = self._randomize_product_url(self.product_url)
+            # Mở trình duyệt với URL sản phẩm Amazon, có verify + retry nếu phát hiện sai trang.
             log.info(f"[Phone:{self.device}] Product URL gốc: {self.product_url}")
-            log.info(f"[Phone:{self.device}] Mở trình duyệt {chosen_browser} → {unique_url[:120]}...")
-            await self.xw.open_url(self.device, unique_url, chosen_browser)
+            log.info(f"[Phone:{self.device}] Expected host: {expected_host}, expected ASIN: {expected_asin}")
+            page_verified = False
+            for open_attempt in range(2):
+                unique_url = self._randomize_product_url(self.product_url)
+                log.info(f"[Phone:{self.device}] URL sau randomize: {unique_url}")
+                log.info(
+                    f"[Phone:{self.device}] Mở trình duyệt {chosen_browser} (attempt {open_attempt + 1}/2) "
+                    f"→ {unique_url[:120]}..."
+                )
+                open_ok = await self.xw.open_url(self.device, unique_url, chosen_browser)
+                log.info(f"[Phone:{self.device}] open_url result: {'OK' if open_ok else 'FAIL'}")
 
-            # Đợi trang sản phẩm load (có text "招待" hoặc "Request Invitation")
-            await self._wait_for_state(
-                ["招待をリクエスト", "Request Invitation", "Invitation"],
-                timeout=10.0, step_name="step1_wait_product_page"
-            )
+                page_verified, verify_reason, verify_xml = await self._verify_expected_product_page(
+                    expected_host=expected_host,
+                    expected_asin=expected_asin,
+                    timeout=10.0,
+                )
+                log.info(f"[Phone:{self.device}] Product page verify: {verify_reason}")
+                if page_verified:
+                    break
+
+                await self._screenshot_step(f"wrong_page_attempt_{open_attempt + 1}")
+                if open_attempt == 0:
+                    log.warning(f"[Phone:{self.device}] Sai trang hoặc fingerprint yếu, thử mở lại link gốc thêm 1 lần...")
+                    await self.xw.kill_browser(self.device, chosen_browser)
+                    await asyncio.sleep(1.0)
+
+            if not page_verified:
+                result["note"] = "Wrong page detected hoặc không xác nhận được product page Amazon"
+                await self._screenshot_step("step1_FAILED_wrong_page_detected")
+                return result
+
             await self._screenshot_step("step1_product_page")
 
             # ── STEP 2: Click nút Request Invitation ──────────────────
@@ -496,10 +710,14 @@ class PhoneRegistrationBot:
                 return result
 
             # Đợi form login xuất hiện (email field)
-            await self._wait_for_state(
+            login_xml = await self._wait_for_state(
                 ["メールアドレス", "Email", "sign in", "サインイン"],
                 timeout=8.0, step_name="step2_wait_login_form"
             )
+            if not login_xml:
+                result["note"] = "Không xác nhận được form đăng nhập sau khi bấm Request Invitation"
+                await self._screenshot_step("step2_FAILED_login_form_not_found")
+                return result
             await self._screenshot_step("step2_after_request_invitation")
 
             # ── STEP 3: Form Login – Nhập Email ──────────────────────
@@ -509,17 +727,38 @@ class PhoneRegistrationBot:
 
             log.info(f"[Phone:{self.device}] Step 3 – Nhập email vào form đăng nhập...")
             await self._screenshot_step("step3a_login_form")
-            # Nhập Email chậm phím từng ký tự (0.07s - 0.22s) với click lệch tâm ô Email (40%-60%, 38%-42%)
-            await self._type_into_field_human(row["email"], 40, 60, 38, 42, "Ô Email")
+            email_ok = await self._type_into_labeled_field(
+                row["email"],
+                ["メールアドレス", "Email address", "Email", "メール"],
+                description="Ô Email",
+                fallback_bbox=(40, 60, 38, 42),
+            )
+            if not email_ok:
+                result["note"] = "Không nhập được email vào form đăng nhập"
+                await self._screenshot_step("step3_FAILED_email_input")
+                return result
 
-            # Click Lệch Tâm Ngẫu Nhiên nút Continue (45%-55%, 53%-57%)
-            await self._tap_bbox_pct(45, 55, 53, 57, "Nút Continue")
+            continue_ok = await self._tap_best_element_with_scroll_search(
+                texts=["続行", "Continue", "次へ", "サインイン"],
+                description="Nút Continue",
+                max_scrolls=1,
+                clickable=True,
+                preferred_region=(30, 70, 45, 80),
+            )
+            if not continue_ok:
+                result["note"] = "Không tìm thấy nút Continue sau khi nhập email"
+                await self._screenshot_step("step3_FAILED_continue_not_found")
+                return result
 
             # Đợi màn hình tiếp theo (Create Account hoặc password form)
-            await self._wait_for_state(
+            post_continue_xml = await self._wait_for_state(
                 ["アカウントを作成", "Create account", "パスワード", "Password"],
                 timeout=8.0, step_name="step3_wait_after_continue"
             )
+            if not post_continue_xml:
+                result["note"] = "Không xác nhận được màn hình sau bước Continue"
+                await self._screenshot_step("step3_FAILED_post_continue_state")
+                return result
             await self._screenshot_step("step3b_after_continue")
 
             # ── STEP 4: Tạo tài khoản ──────────────────────────
@@ -528,14 +767,27 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] Step 4 – Click tạo tài khoản mới...")
-            # Click Lệch Tâm Ngẫu Nhiên nút Create Account (40%-60%, 48%-52%)
-            await self._tap_bbox_pct(40, 60, 48, 52, "Nút Create Account")
+            create_ok = await self._tap_best_element_with_scroll_search(
+                texts=["アカウントを作成", "Create account", "新規登録"],
+                description="Nút Create Account",
+                max_scrolls=1,
+                clickable=True,
+                preferred_region=(25, 75, 35, 85),
+            )
+            if not create_ok:
+                result["note"] = "Không tìm thấy nút Create Account"
+                await self._screenshot_step("step4_FAILED_create_account_not_found")
+                return result
 
             # Đợi form đăng ký (có ô Tên)
-            await self._wait_for_state(
+            register_form_xml = await self._wait_for_state(
                 ["お名前", "氏名", "名前", "Your name", "First name"],
                 timeout=8.0, step_name="step4_wait_register_form"
             )
+            if not register_form_xml:
+                result["note"] = "Không xác nhận được form đăng ký sau khi bấm Create Account"
+                await self._screenshot_step("step4_FAILED_register_form_not_found")
+                return result
             await self._screenshot_step("step4_create_account_form")
 
             # ── STEP 5: Điền form đăng ký ─────────────────────────────
@@ -544,16 +796,42 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] Step 5 – Điền form đăng ký tài khoản...")
-            # Điền Tên: Bounding Box (40%-60%, 30%-34%)
-            await self._type_into_field_human(row["name"], 40, 60, 30, 34, "Ô Tên (氏名)")
+            name_ok = await self._type_into_labeled_field(
+                row["name"],
+                ["お名前", "氏名", "名前", "Your name", "First name"],
+                description="Ô Tên (氏名)",
+                fallback_bbox=(40, 60, 30, 34),
+            )
+            if not name_ok:
+                result["note"] = "Không nhập được tên vào form đăng ký"
+                await self._screenshot_step("step5_FAILED_name_input")
+                return result
             await self._delay(0.5, 1.0)
 
-            # Điền Mật khẩu: Bounding Box (40%-60%, 46%-50%)
-            await self._type_into_field_human(row["password"], 40, 60, 46, 50, "Ô Mật khẩu")
+            password_ok = await self._type_into_labeled_field(
+                row["password"],
+                ["パスワード", "Password"],
+                description="Ô Mật khẩu",
+                is_password=True,
+                fallback_bbox=(40, 60, 46, 50),
+            )
+            if not password_ok:
+                result["note"] = "Không nhập được mật khẩu"
+                await self._screenshot_step("step5_FAILED_password_input")
+                return result
             await self._delay(0.5, 1.0)
 
-            # Điền Xác nhận mật khẩu: Bounding Box (40%-60%, 56%-60%)
-            await self._type_into_field_human(row["password"], 40, 60, 56, 60, "Ô Xác nhận mật khẩu")
+            confirm_ok = await self._type_into_labeled_field(
+                row["password"],
+                ["パスワードを再入力", "Confirm password", "パスワード再入力", "Re-enter password"],
+                description="Ô Xác nhận mật khẩu",
+                is_password=True,
+                fallback_bbox=(40, 60, 56, 60),
+            )
+            if not confirm_ok:
+                result["note"] = "Không nhập được ô xác nhận mật khẩu"
+                await self._screenshot_step("step5_FAILED_confirm_password_input")
+                return result
             await self._delay(0.5, 1.0)
             await self._screenshot_step("step5_form_filled")
 
@@ -572,10 +850,14 @@ class PhoneRegistrationBot:
             await self._tap_bbox_pct(40, 60, 68, 72, "Nút Submit đăng ký")
 
             # Đợi màn hình OTP xuất hiện
-            await self._wait_for_state(
+            otp_xml = await self._wait_for_state(
                 ["認証コード", "verification code", "OTP", "コードを入力", "メール"],
                 timeout=10.0, step_name="step6_wait_otp_screen"
             )
+            if not otp_xml:
+                result["note"] = "Không xác nhận được màn hình nhập OTP sau submit"
+                await self._screenshot_step("step6_FAILED_otp_screen_not_found")
+                return result
             await self._screenshot_step("step6_after_submit")
 
             # ── STEP 7: Nhập OTP ──────────────────────────────────────
@@ -618,7 +900,17 @@ class PhoneRegistrationBot:
             await self._screenshot_step("step7a_otp_form")
 
             # Điền OTP + verify
-            await self._type_and_verify(otp, 30, 70, 40, 44, "Ô OTP", is_password=False)
+            otp_ok = await self._type_into_labeled_field(
+                otp,
+                ["認証コード", "verification code", "OTP", "コードを入力"],
+                description="Ô OTP",
+                is_password=False,
+                fallback_bbox=(30, 70, 40, 44),
+            )
+            if not otp_ok:
+                result["note"] = "Không nhập được OTP vào form xác minh"
+                await self._screenshot_step("step7_FAILED_otp_input")
+                return result
             await self._screenshot_step("step7b_otp_typed")
 
             # Dynamic tap nút Xác minh OTP (fallback: 40%-60%, 58%-62%)

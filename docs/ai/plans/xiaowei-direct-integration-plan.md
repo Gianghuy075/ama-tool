@@ -31,7 +31,7 @@ Mục tiêu vận hành:
 - [x] Gia cố logging/chẩn đoán cơ bản trong `xiaowei_client.py`
 - [x] Thêm diagnostics tích hợp trong `RegisterBot` cho XiaoWei/Phone Farm
 - [ ] Xác minh đầy đủ API XiaoWei chính thức từ tài liệu vendor
-- [ ] Test thực tế trên máy Windows Nhật
+- [x] Test thực tế trên máy Windows Nhật
 - [ ] Chạy end-to-end 1 account bằng XiaoWei
 - [ ] Chạy multi-device ổn định
 - [ ] Chuyển XiaoWei thành backend phone mode chính thức
@@ -43,17 +43,17 @@ Mục tiêu vận hành:
 | Phase 0 | Thu thập thông tin thật từ máy Nhật + doc XiaoWei | Completed | 100% |
 | Phase 1 | Đối chiếu contract API XiaoWei official | In progress | 80% |
 | Phase 2 | Chuẩn bị config/runtime cho XiaoWei | In progress | 100% |
-| Phase 3 | Smoke test backend XiaoWei | In progress | 45% |
-| Phase 4 | Xác minh `uiautomator dump` + ScreenReader | Chưa bắt đầu runtime | 0% |
-| Phase 5 | Kiểm thử flow bot từng phần | Chưa bắt đầu runtime | 0% |
+| Phase 3 | Smoke test backend XiaoWei | In progress | 85% |
+| Phase 4 | Xác minh `uiautomator dump` + ScreenReader | In progress | 70% |
+| Phase 5 | Kiểm thử flow bot từng phần | In progress | 10% |
 | Phase 6 | End-to-end test | Chưa bắt đầu runtime | 0% |
 | Phase 7 | Hardening | In progress | 35% |
 | Phase 8 | Chuyển đổi kiến trúc vận hành | Chưa bắt đầu | 0% |
 
 ## Trạng thái hiện tại
 
-- `Current phase`: `Phase 1`
-- `Overall progress`: khoảng `63%`
+- `Current phase`: `Phase 5`
+- `Overall progress`: khoảng `76%`
 - `Đã xong trong repo`:
   - adapter XiaoWei đã được gia cố
   - có UI test connection
@@ -65,8 +65,8 @@ Mục tiêu vận hành:
 - `Blocker hiện tại`:
   - tài liệu vendor có nhiều article con bị lỗi copy/paste, nên không thể tin hoàn toàn từng detail page
   - endpoint handbook tree đã xác định được nhưng site XiaoWei phản hồi không ổn định khi truy vấn sâu
-  - `computer-use` đang đọc được trang nhưng click vào node sidebar/link chưa ổn định
-  - chưa có runtime evidence cho `uiautomator dump`
+  - screenshot-to-file của XiaoWei runtime trên máy Nhật chưa ghi file local dù API trả `SUCCESS`
+  - `tap/swipe/type_text/open_app` và end-to-end registration vẫn cần runtime evidence
 
 ## Bối cảnh kỹ thuật đã xác nhận
 
@@ -97,7 +97,7 @@ Mục tiêu vận hành:
 
 - Public page XiaoWei bị khóa bằng mật khẩu 4 số, nhưng article `234` đã truy xuất được qua site API nội bộ
 - Mới đối chiếu được contract chung của API XiaoWei; action-specific contract vẫn thiếu
-- Chưa có runtime test thực trên máy Windows Nhật
+- Đã có runtime test thực trên máy Windows Nhật cho `get_devices`, `adb`, `uiautomator dump`
 
 ## Sơ đồ mục tiêu
 
@@ -247,7 +247,7 @@ Phase này được chốt hoàn thành với assumption vận hành đã đư�
 
 ### API hành vi cơ bản
 
-- [ ] `get_devices()` pass
+- [x] `get_devices()` pass
 - [ ] `tap()` pass
 - [ ] `device_click()` pass
 - [ ] `swipe()` pass
@@ -255,8 +255,8 @@ Phase này được chốt hoàn thành với assumption vận hành đã đư�
 - [ ] `type_char()` pass
 - [ ] `press_back()` pass
 - [ ] `press_home()` pass
-- [ ] `run_adb()` pass
-- [ ] `run_adb_with_output()` pass
+- [x] `run_adb()` pass
+- [x] `run_adb_with_output()` pass
 - [ ] `open_app()` pass
 - [ ] `open_url()` pass
 - [ ] `screenshot()` pass
@@ -266,16 +266,16 @@ Phase này được chốt hoàn thành với assumption vận hành đã đư�
 - [x] Có API `/api/xiaowei/diagnostics`
 - [x] Có nút `Chẩn Đoán` trong dashboard
 - [x] Có CLI `python main.py --diagnose-xiaowei`
-- [ ] Chạy diagnostics pass trên máy Windows Nhật
-- [ ] Có report JSON trong `data/diagnostics`
+- [x] Chạy diagnostics pass trên máy Windows Nhật
+- [x] Có report JSON trong `data/diagnostics`
 
 ### Test evidence cần lưu
 
 - [ ] Screenshot màn hình device list
 - [ ] Screenshot thao tác tap/click thành công
 - [ ] File screenshot lưu thành công về disk
-- [ ] Log `wm size` trả output đúng
-- [ ] Log `pm list packages` trả output đúng
+- [x] Log `wm size` trả output đúng
+- [x] Log `pm list packages` trả output đúng
 
 ## Phase 4 - Xác minh compatibility với ScreenReader
 
@@ -289,10 +289,10 @@ Bot hiện tại phụ thuộc mạnh vào:
 
 Checklist:
 
-- [ ] `run_adb("uiautomator dump /sdcard/ui.xml")` chạy được qua XiaoWei
-- [ ] `run_adb_with_output("cat /sdcard/ui.xml")` trả XML hợp lệ
-- [ ] XML có chứa text node như kỳ vọng
-- [ ] `ScreenReader.dump_ui()` hoạt động ổn định
+- [x] `run_adb("uiautomator dump /sdcard/ui.xml")` chạy được qua XiaoWei
+- [x] `run_adb_with_output("cat /sdcard/ui.xml")` trả XML hợp lệ
+- [x] XML có chứa text node như kỳ vọng
+- [x] `ScreenReader.dump_ui()` hoạt động ổn định
 - [ ] `ScreenReader.find_any_element()` tìm được phần tử thật
 - [ ] `device_click()` click đúng theo tọa độ center từ XML
 
@@ -330,6 +330,184 @@ Checklist:
 - [ ] Gmail OTP reader vẫn lấy được mã
 - [ ] Bot nhập OTP được trên XiaoWei
 - [ ] Qua được bước verify OTP
+
+## Chương Trình Cải Tiến Ổn Định Bot
+
+Phần này có thể nằm luôn trong plan XiaoWei hiện tại. Đây là nhánh cải tiến kỹ thuật phục vụ trực tiếp cho `Phase 5`, `Phase 6` và `Phase 7`.
+
+Mục tiêu:
+
+- giảm trường hợp bot vào sai trang
+- giảm click sai nút / nhập sai ô input
+- tăng khả năng fail-safe + log evidence khi flow lệch
+
+### Bài toán A - Xác định đã vào đúng link Amazon chưa
+
+#### A1. Khóa chặt đầu vào `product_url`
+
+- [x] Chỉ chấp nhận `https://www.amazon.co.jp/...`
+- [x] Parse và lưu `expected_host`
+- [x] Parse và lưu `expected_asin`
+- [x] Nếu URL không parse được hoặc không có ASIN thì fail sớm trước khi chạy bot
+
+#### A2. Ghi log đầy đủ URL điều hướng
+
+- [x] Log `Product URL gốc`
+- [x] Log `URL sau randomize`
+- [ ] Log browser package thực tế được chọn
+- [x] Log kết quả `open_url()` thành công/thất bại
+
+#### A3. Xác minh “đúng trang” bằng page fingerprint
+
+- [x] Xây utility `verify_expected_product_page()`
+- [ ] Fingerprint tối thiểu phải kiểm:
+  - [x] host hoặc dấu hiệu Amazon JP
+  - [ ] ASIN hoặc path sản phẩm
+  - [x] text đặc trưng của trang sản phẩm
+  - [x] text đặc trưng của CTA như `招待をリクエストする`
+- [ ] Không dựa vào 1 text đơn lẻ
+- [ ] Hỗ trợ nhiều pattern cho trang sản phẩm Amazon JP
+
+#### A4. Cơ chế phát hiện sai trang
+
+- [x] Nếu fingerprint cho thấy không phải Amazon product page thì gắn trạng thái `wrong_page_detected`
+- [x] Chụp screenshot evidence khi detect sai trang
+- [ ] Dump UI XML evidence khi detect sai trang
+- [x] Ghi log rõ host/text hiện tại đang thấy
+
+#### A5. Chiến lược recovery khi sai trang
+
+- [x] Retry mở lại link gốc tối đa 1 lần
+- [ ] Nếu vẫn sai, kill browser rồi mở lại thêm 1 lần cuối
+- [x] Nếu vẫn sai sau retry budget, fail an toàn
+- [x] Không cho bot click tiếp trên trang sai
+
+#### A6. Deliverable kỹ thuật cho bài toán A
+
+- [x] Utility parse URL + extract ASIN
+- [x] Utility page fingerprint cho Amazon product page
+- [ ] Result/note codes:
+  - [x] `wrong_page_detected`
+  - [ ] `wrong_host_detected`
+  - [ ] `product_page_fingerprint_missing`
+  - [ ] `open_url_retry_exhausted`
+
+### Bài toán B - Xác định chính xác nút click và ô input
+
+#### B1. Chuẩn hóa cơ chế tìm element từ UI XML
+
+- [x] Tạo abstraction kiểu `find_best_element()`
+- [ ] Hỗ trợ match theo:
+  - [x] `text`
+  - [x] `content-desc`
+  - [x] `resource-id`
+  - [x] `class`
+  - [x] `clickable`
+  - [x] `enabled`
+  - [x] `focusable`
+- [x] Không chỉ lấy “node đầu tiên match text”
+
+#### B2. Thêm scoring cho nhiều ứng viên
+
+- [x] Chấm điểm node theo mức khớp text exact/partial
+- [x] Ưu tiên node clickable/enabled
+- [x] Ưu tiên node có bounds hợp lý
+- [ ] Ưu tiên node nằm ở vùng màn hình hợp logic với flow
+- [x] Khi có nhiều node, chọn node score cao nhất thay vì node đầu tiên
+
+#### B3. Anchor-based targeting
+
+- [x] Hỗ trợ tìm input theo label gần kề
+- [ ] Hỗ trợ tìm button theo block/section gần text anchor
+- [ ] Hỗ trợ quan hệ:
+  - [x] node bên dưới anchor
+  - [ ] node cùng container
+  - [x] node gần nhất theo khoảng cách hình học
+
+#### B4. Bỏ dần hardcoded bbox khỏi main path
+
+- [ ] Bbox chỉ còn là fallback cuối
+- [ ] Không click bbox nếu chưa qua precondition hợp lý
+- [ ] Với CTA quan trọng như `Request Invitation`, nếu không thấy text thật thì fail-safe thay vì click bừa
+- [x] Step `Request Invitation` đã chuyển sang search + scroll ngắn + fail-safe
+
+#### B5. Scroll strategy ổn định hơn
+
+- [x] Thay `scroll_down(3)` bằng incremental scroll search ở các step quan trọng
+- [x] Sau mỗi lần scroll phải dump UI và tìm lại
+- [ ] Giới hạn số lần scroll theo từng step
+- [x] Nếu scroll quá budget mà chưa thấy element thì fail an toàn
+
+#### B6. Verify sau mỗi action
+
+- [ ] Sau click CTA phải verify state mới
+- [ ] Sau nhập email phải verify text hoặc verify màn hình chuyển bước
+- [ ] Sau submit phải verify page fingerprint mới
+- [ ] Nếu verify fail:
+  - [ ] retry có kiểm soát
+  - [ ] chụp screenshot
+  - [ ] dump XML
+  - [ ] dừng step nếu vượt retry budget
+
+#### B7. Input targeting chính xác hơn
+
+- [x] Tìm `EditText` theo class + label + focus state
+- [x] Hỗ trợ verify nội dung field sau khi nhập
+- [ ] Hỗ trợ tách logic cho:
+  - [x] email field
+  - [x] name field
+  - [x] password field
+  - [x] confirm password field
+- [x] Với password field, verify bằng state change thay vì đọc text thô
+
+#### B8. Fallback nâng cao nếu UI XML không đủ
+
+- [ ] Đánh giá bổ sung OCR/image matching chỉ như fallback
+- [ ] Chỉ dùng fallback vision nếu XML không có node đáng tin
+- [ ] Không dùng vision làm main path khi chưa thật sự cần
+
+### Roadmap triển khai cải tiến
+
+#### Wave 1 - Guardrail tối thiểu
+
+- [x] Tắt hoàn toàn nhánh thực nghiệm không mong muốn trong runtime test
+- [x] Validate `product_url` + ASIN trước khi chạy
+- [x] Log `Product URL gốc` + `URL sau randomize`
+- [x] Wrong-page detection cơ bản
+- [x] Fail-safe nếu không thấy `Request Invitation`
+
+#### Wave 2 - Ổn định element targeting
+
+- [x] `find_best_element()` + scoring
+- [x] anchor-based targeting cho CTA đầu tiên
+- [x] anchor-based targeting cho email field
+- [x] anchor-based targeting cho create-account button
+- [x] incremental scroll search chuẩn hóa
+
+#### Wave 3 - Verify & recovery
+
+- [ ] verify state sau click/typing/submit
+- [ ] retry budget theo từng step
+- [ ] chuẩn hóa note/error code
+- [ ] screenshot + XML evidence đồng bộ theo step fail
+
+#### Wave 4 - Hardening production
+
+- [ ] repeat test 3 account / 1 device
+- [ ] kiểm tra multi-device consistency
+- [ ] rà lại toàn bộ step còn dùng bbox cứng
+- [ ] chốt fallback strategy cuối cùng
+
+### Mapping vào phase hiện tại
+
+- Bài toán A gắn trực tiếp vào:
+  - `Phase 5` phần điều hướng
+  - `Phase 6` phần end-to-end
+  - `Phase 7` phần hardening bot flow
+- Bài toán B gắn trực tiếp vào:
+  - `Phase 4` phần ScreenReader compatibility
+  - `Phase 5` phần click/input
+  - `Phase 7` phần hardening bot flow
 
 ## Phase 6 - End-to-end test
 
