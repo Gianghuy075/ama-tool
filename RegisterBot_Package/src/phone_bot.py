@@ -231,6 +231,79 @@ class PhoneRegistrationBot:
 
         return False, "Không thấy fingerprint đáng tin của product page Amazon", xml
 
+    def _is_chrome_first_run_screen(self, xml: str) -> bool:
+        if not xml:
+            return False
+        xml_lower = xml.lower()
+        markers = [
+            "tùy chỉnh chrome theo cách của bạn",
+            "chrome theo cách của bạn",
+            "không đăng nhập",
+            "tiếp tục bằng tài khoản",
+            "customize chrome",
+            "continue as",
+            "sign in to chrome",
+            "use without an account",
+            "no thanks",
+            "skip sign in",
+        ]
+        return any(marker in xml_lower for marker in markers)
+
+    async def _dismiss_chrome_first_run_if_needed(self, browser_package: str, target_url: str) -> bool:
+        """
+        Xử lý các màn hình first-run/onboarding của Chrome sau khi clear data.
+        Nếu đã phải dismiss onboarding thì mở lại target_url sau đó.
+        """
+        if browser_package != "com.android.chrome":
+            return False
+
+        handled_any = False
+        dismiss_text_sets = [
+            ["Không đăng nhập", "Use without an account", "No thanks", "Skip", "Not now"],
+            ["Chấp nhận và tiếp tục", "Accept & continue", "Continue", "Tiếp tục"],
+            ["OK", "Đồng ý", "Got it"],
+        ]
+
+        for step in range(4):
+            xml = await self.screen_reader.dump_ui(self.device)
+            if not self._is_chrome_first_run_screen(xml or ""):
+                break
+
+            handled_any = True
+            log.warning(f"[Phone:{self.device}] Phát hiện Chrome first-run/onboarding screen (step {step + 1})")
+
+            tapped = False
+            for texts in dismiss_text_sets:
+                elem = self.screen_reader.find_best_element(
+                    xml or "",
+                    texts=texts,
+                    clickable=True,
+                    preferred_region=(5, 95, 55, 95),
+                    partial=True,
+                )
+                if elem:
+                    log.info(
+                        f"[Phone:{self.device}] Dismiss Chrome onboarding bằng '{elem.get('text') or elem.get('content_desc')}' "
+                        f"tại ({elem['cx']},{elem['cy']})"
+                    )
+                    await self.xw.device_click(self.device, elem["cx"], elem["cy"])
+                    await self._delay(0.8, 1.3)
+                    await self.screen_reader.wait_for_ui_change(self.device, xml, timeout=5.0, poll_interval=0.5)
+                    tapped = True
+                    break
+
+            if not tapped:
+                log.warning(f"[Phone:{self.device}] Không tìm được nút dismiss rõ ràng trên Chrome onboarding")
+                break
+
+        if handled_any:
+            log.info(f"[Phone:{self.device}] Mở lại product URL sau khi dismiss Chrome onboarding")
+            reopen_ok = await self.xw.open_url(self.device, target_url, browser_package)
+            log.info(f"[Phone:{self.device}] reopen_url after onboarding: {'OK' if reopen_ok else 'FAIL'}")
+            await self._delay(1.0, 1.6)
+
+        return handled_any
+
     # ── Core: Tap and type helpers ────────────────────────────────────
 
     async def _tap_at(self, x: float, y: float, description: str = ""):
@@ -877,6 +950,7 @@ class PhoneRegistrationBot:
                 )
                 open_ok = await self.xw.open_url(self.device, unique_url, chosen_browser)
                 log.info(f"[Phone:{self.device}] open_url result: {'OK' if open_ok else 'FAIL'}")
+                await self._dismiss_chrome_first_run_if_needed(chosen_browser, unique_url)
 
                 page_verified, verify_reason, verify_xml = await self._verify_expected_product_page(
                     expected_host=expected_host,
