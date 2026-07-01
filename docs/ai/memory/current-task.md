@@ -49,6 +49,11 @@ in_progress
     - dismiss `Chrome first-run` / `Translate page` infobar nếu có
   - tách rõ `product page visible` với `CTA clickable`
   - locator lại nút CTA theo `anchor -> button below anchor -> verify -> back -> retry`
+  - retest `sign-in mobile web` với patch mới:
+    - nhận đúng `signin_entry`
+    - nhập đúng ô `Enter mobile number or email`
+    - bấm đúng nút vàng `Continue`
+    - phân biệt rõ `create_account_prompt` / `register_form` / `password_login`
   - runtime verify app open/start
   - runtime verify tap/swipe/type_text
   - end-to-end 1 account

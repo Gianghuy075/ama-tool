@@ -45,7 +45,7 @@ Mục tiêu vận hành:
 | Phase 2 | Chuẩn bị config/runtime cho XiaoWei | In progress | 100% |
 | Phase 3 | Smoke test backend XiaoWei | In progress | 85% |
 | Phase 4 | Xác minh `uiautomator dump` + ScreenReader | In progress | 70% |
-| Phase 5 | Kiểm thử flow bot từng phần | In progress | 20% |
+| Phase 5 | Kiểm thử flow bot từng phần | In progress | 28% |
 | Phase 6 | End-to-end test | Chưa bắt đầu runtime | 0% |
 | Phase 7 | Hardening | In progress | 35% |
 | Phase 8 | Chuyển đổi kiến trúc vận hành | Chưa bắt đầu | 0% |
@@ -53,7 +53,7 @@ Mục tiêu vận hành:
 ## Trạng thái hiện tại
 
 - `Current phase`: `Phase 5`
-- `Overall progress`: khoảng `78%`
+- `Overall progress`: khoảng `80%`
 - `Đã xong trong repo`:
   - adapter XiaoWei đã được gia cố
   - có UI test connection
@@ -557,6 +557,11 @@ Kết luận:
 
 - [x] verify state sau click/typing/submit
 - [x] retry budget theo từng step
+- [x] phân loại screen transition:
+  - `signin_entry`
+  - `create_account_prompt`
+  - `register_form`
+  - `password_login`
 - [ ] chuẩn hóa note/error code
 - [ ] screenshot + XML evidence đồng bộ theo step fail
 
@@ -589,6 +594,11 @@ Kết luận:
   - rebaseline mới:
     - nguyên nhân gốc đã được mở rộng thành `surface control + CTA targeting + post-click recovery`
     - không thể coi Wave 1/2 là đủ để end-to-end ổn định nếu chưa khóa đúng browser surface
+  - patch mới đã thêm riêng cho mobile web sign-in flow:
+    - phân loại account surface theo state thay vì chỉ grep text rời rạc
+    - finder riêng cho ô `Enter mobile number or email`
+    - finder riêng cho nút vàng `Continue` theo `field anchor -> button below field`
+    - chặn bot đi tiếp nếu sau `Continue` rơi vào `password login` thay vì `create account/register form`
 
 #### Wave 4 - Hardening production
 

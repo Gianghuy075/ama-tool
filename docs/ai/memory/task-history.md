@@ -154,6 +154,34 @@
   - Wave 1 and Wave 2 remain useful but are no longer sufficient indicators of runtime readiness
   - a new `Wave S - Surface control` was added ahead of CTA hardening
 
+## 2026-07-01 - Sign-in mobile web state-machine hardening
+
+- After the product CTA started landing on the real Amazon mobile web sign-in screen, the next blocker moved from `product CTA` to `post-CTA account flow`.
+- Real runtime evidence showed the previous Step 3/4 logic was still too generic:
+  - email field detection only matched broad `Email` labels
+  - `Continue` still depended on generic text search and could drift on mobile web
+  - the bot could continue even if the surface had changed into `password login` instead of `create account`
+- Fix implemented in `RegisterBot_Package/src/phone_bot.py`:
+  - added explicit account-surface classification:
+    - `signin_entry`
+    - `create_account_prompt`
+    - `register_form`
+    - `password_login`
+  - added dedicated finder for the sign-in field:
+    - `Enter mobile number or email`
+    - Japanese label variants
+    - top-half EditText fallback
+  - added dedicated `Continue` tap logic:
+    - `field anchor -> primary button below anchor`
+    - no scroll on the sign-in screen
+    - only fallback to constrained scoring inside the sign-in viewport
+  - hardened state transition checks:
+    - fail fast if `Continue` lands on `password login`
+    - skip Step 3/4 if runtime already lands directly on `register_form`
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
+  - pass
+
 ## Mục tiêu
 
 Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user hoặc AI Agent.

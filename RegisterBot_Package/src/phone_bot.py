@@ -1056,6 +1056,355 @@ class PhoneRegistrationBot:
         best = candidates[0]
         return best if best["score"] >= 120.0 else None
 
+    def _node_visible_text(self, node: dict) -> str:
+        return ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
+
+    def _text_matches_any(self, value: str, patterns: list[str], partial: bool = True) -> bool:
+        value_lower = (value or "").strip().lower()
+        if not value_lower:
+            return False
+        for pattern in patterns:
+            pattern_lower = (pattern or "").strip().lower()
+            if not pattern_lower:
+                continue
+            if value_lower == pattern_lower:
+                return True
+            if partial and pattern_lower in value_lower:
+                return True
+        return False
+
+    def _classify_account_surface(self, xml: str) -> tuple[str, str]:
+        """
+        Phân loại màn hình Amazon mobile web sau CTA:
+        - signin_entry
+        - create_account_prompt
+        - register_form
+        - password_login
+        - otp
+        - unknown
+        """
+        if not xml:
+            return "unknown", "Không có XML để phân loại màn hình"
+
+        nodes = self.screen_reader._parse_nodes(xml)
+        input_nodes = [node for node in nodes if "edittext" in node["class"].lower() and node["enabled"]]
+        xml_lower = xml.lower()
+
+        signin_markers = [
+            "sign in or create account",
+            "enter mobile number or email",
+            "enter email or mobile phone number",
+            "メールアドレスまたは携帯電話番号",
+            "携帯電話番号またはeメール",
+            "サインイン",
+            "続行",
+            "continue",
+        ]
+        create_account_markers = [
+            "アカウントを作成",
+            "create account",
+            "新規登録",
+        ]
+        register_name_markers = [
+            "お名前",
+            "氏名",
+            "名前",
+            "your name",
+            "first name",
+            "name",
+        ]
+        password_markers = [
+            "パスワード",
+            "password",
+            "create a password",
+        ]
+        otp_markers = [
+            "認証コード",
+            "verification code",
+            "otp",
+            "コードを入力",
+        ]
+
+        has_signin_marker = any(marker in xml_lower for marker in signin_markers)
+        has_create_account_marker = any(marker in xml_lower for marker in create_account_markers)
+        has_name_marker = any(marker in xml_lower for marker in register_name_markers)
+        has_password_marker = any(marker in xml_lower for marker in password_markers)
+        has_otp_marker = any(marker in xml_lower for marker in otp_markers)
+
+        if has_otp_marker:
+            return "otp", "Đang ở màn hình nhập OTP"
+
+        if has_name_marker and has_password_marker and len(input_nodes) >= 2:
+            return "register_form", f"Đang ở form đăng ký với {len(input_nodes)} input field(s)"
+
+        if has_signin_marker and input_nodes:
+            return "signin_entry", f"Đang ở màn sign-in entry với {len(input_nodes)} input field(s)"
+
+        if has_create_account_marker and not has_name_marker:
+            return "create_account_prompt", "Đang ở màn hình prompt/create-account transition"
+
+        if has_password_marker and input_nodes:
+            return "password_login", f"Đang ở màn password/login với {len(input_nodes)} input field(s)"
+
+        return "unknown", "Không phân loại được surface Amazon account flow"
+
+    async def _wait_for_account_surface(
+        self,
+        expected_states: list[str],
+        timeout: float = 8.0,
+        step_name: str = "",
+    ) -> tuple[str, Optional[str], str]:
+        """
+        Poll UI cho tới khi surface account flow rơi vào một state kỳ vọng.
+        """
+        start = time.time()
+        last_xml = None
+        last_reason = "Chưa có dữ liệu UI"
+
+        while time.time() - start < timeout:
+            xml = await self.screen_reader.dump_ui(self.device)
+            if xml:
+                last_xml = xml
+                state, reason = self._classify_account_surface(xml)
+                last_reason = reason
+                if state in expected_states:
+                    log.info(
+                        f"[Phone:{self.device}] Surface state='{state}' sau {time.time() - start:.1f}s ({reason})"
+                    )
+                    return state, xml, reason
+            await asyncio.sleep(0.7)
+
+        label = step_name or "/".join(expected_states)
+        log.warning(
+            f"[Phone:{self.device}] Timeout {timeout}s khi chờ account surface {expected_states} ({label}) - {last_reason}"
+        )
+        await self._screenshot_step(f"TIMEOUT_{label[:30]}")
+        if last_xml:
+            state, reason = self._classify_account_surface(last_xml)
+            return state, last_xml, reason
+        return "unknown", None, last_reason
+
+    def _find_signin_email_field(self, xml: str) -> Optional[dict]:
+        label_texts = [
+            "Enter mobile number or email",
+            "Enter email or mobile phone number",
+            "メールアドレスまたは携帯電話番号",
+            "携帯電話番号またはEメール",
+            "Email address",
+            "Email",
+            "メールアドレス",
+            "メール",
+        ]
+        field = self.screen_reader.find_input_near_label(xml or "", label_texts) if xml else None
+        if field:
+            return field
+
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return None
+        screen_w = max(node["x2"] for node in nodes)
+        screen_h = max(node["y2"] for node in nodes)
+        candidates = []
+        for node in nodes:
+            if "edittext" not in node["class"].lower() or not node["enabled"]:
+                continue
+
+            x_pct = (node["cx"] / max(1, screen_w)) * 100.0
+            y_pct = (node["cy"] / max(1, screen_h)) * 100.0
+            width_pct = (node["width"] / max(1, screen_w)) * 100.0
+            height_pct = (node["height"] / max(1, screen_h)) * 100.0
+
+            score = 80.0
+            if 20.0 <= y_pct <= 50.0:
+                score += 30.0
+            if width_pct >= 55.0:
+                score += 25.0
+            elif width_pct >= 40.0:
+                score += 10.0
+            if 20.0 <= x_pct <= 80.0:
+                score += 10.0
+            if 3.0 <= height_pct <= 9.0:
+                score += 10.0
+            if node["focusable"]:
+                score += 8.0
+            if node["clickable"]:
+                score += 6.0
+
+            candidates.append({
+                **node,
+                "score": round(score, 2),
+            })
+
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        best = candidates[0]
+        return best if best["score"] >= 115.0 else None
+
+    def _find_primary_button_below_anchor(
+        self,
+        xml: str,
+        anchor: dict,
+        button_texts: list[str],
+        max_vertical_gap_pct: float = 24.0,
+    ) -> Optional[dict]:
+        """
+        Tìm primary CTA nằm ngay bên dưới 1 anchor field/label.
+        Dùng cho Continue và các CTA chính trong mobile web flow.
+        """
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return None
+
+        screen_w = max(node["x2"] for node in nodes)
+        screen_h = max(node["y2"] for node in nodes)
+        max_vertical_gap_px = int(screen_h * (max_vertical_gap_pct / 100.0))
+        candidates = []
+
+        for node in nodes:
+            if not node["enabled"]:
+                continue
+
+            visible_text = self._node_visible_text(node)
+            if visible_text and not self._text_matches_any(visible_text, button_texts, partial=True):
+                continue
+
+            x_pct = (node["cx"] / max(1, screen_w)) * 100.0
+            y_pct = (node["cy"] / max(1, screen_h)) * 100.0
+            width_pct = (node["width"] / max(1, screen_w)) * 100.0
+            height_pct = (node["height"] / max(1, screen_h)) * 100.0
+
+            if node["y1"] <= anchor["y2"]:
+                continue
+            if node["y1"] - anchor["y2"] > max_vertical_gap_px:
+                continue
+            if not (15.0 <= x_pct <= 85.0):
+                continue
+            if width_pct < 35.0:
+                continue
+            if not (2.0 <= height_pct <= 12.0):
+                continue
+
+            score = 100.0
+            if self._text_matches_any(visible_text, button_texts, partial=False):
+                score += 100.0
+            elif self._text_matches_any(visible_text, button_texts, partial=True):
+                score += 70.0
+            else:
+                score -= 20.0
+
+            if node["clickable"]:
+                score += 25.0
+            if "button" in node["class"].lower():
+                score += 20.0
+            if 65.0 <= width_pct <= 96.0:
+                score += 35.0
+            elif width_pct >= 50.0:
+                score += 20.0
+            if 30.0 <= y_pct <= 72.0:
+                score += 15.0
+
+            distance_pct = ((node["y1"] - anchor["y2"]) / max(1, screen_h)) * 100.0
+            score += max(0.0, 25.0 - distance_pct)
+
+            candidates.append({
+                **node,
+                "visible_text": visible_text,
+                "score": round(score, 2),
+                "x_pct": round(x_pct, 2),
+                "y_pct": round(y_pct, 2),
+                "width_pct": round(width_pct, 2),
+            })
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        preview = [
+            f"({c['cx']},{c['cy']}) score={c['score']} y={c['y_pct']} width={c['width_pct']} text={c.get('visible_text','')[:30]}"
+            for c in candidates[:3]
+        ]
+        log.info(f"[Phone:{self.device}] Primary button dưới anchor candidates: {' | '.join(preview)}")
+        best = candidates[0]
+        return best if best["score"] >= 150.0 else None
+
+    async def _tap_signin_continue_button(self, xml: Optional[str] = None) -> bool:
+        """
+        Tìm đúng nút vàng Continue ngay dưới ô email/mobile trên màn sign-in entry.
+        Không scroll ở bước này.
+        """
+        xml = xml or await self.screen_reader.dump_ui(self.device)
+        if not xml:
+            return False
+
+        field = self._find_signin_email_field(xml)
+        if field:
+            log.info(
+                f"[Phone:{self.device}] Sign-in email field tại ({field['cx']},{field['cy']}) "
+                f"score={field.get('score')}"
+            )
+            button = self._find_primary_button_below_anchor(
+                xml,
+                field,
+                ["Continue", "続行", "次へ", "サインイン"],
+                max_vertical_gap_pct=22.0,
+            )
+            if button:
+                log.info(
+                    f"[Phone:{self.device}] Tap đúng nút Continue dưới ô email tại ({button['cx']},{button['cy']}) "
+                    f"score={button.get('score')}"
+                )
+                await self.xw.device_click(self.device, button["cx"], button["cy"])
+                await self._delay()
+                return True
+
+        fallback = self.screen_reader.find_best_element(
+            xml,
+            texts=["Continue", "続行", "次へ", "サインイン"],
+            clickable=True,
+            preferred_region=(15, 85, 28, 65),
+            partial=True,
+        )
+        if fallback:
+            log.info(
+                f"[Phone:{self.device}] Fallback tap nút Continue theo scoring tại ({fallback['cx']},{fallback['cy']}) "
+                f"score={fallback.get('score')}"
+            )
+            await self.xw.device_click(self.device, fallback["cx"], fallback["cy"])
+            await self._delay()
+            return True
+
+        return False
+
+    async def _type_into_signin_email_field(self, email: str) -> bool:
+        """
+        Nhập email vào đúng ô trên màn sign-in mobile web của Amazon.
+        Ưu tiên field finder chuyên dụng; fallback cuối cùng mới dùng bbox.
+        """
+        xml = await self.screen_reader.dump_ui(self.device)
+        field = self._find_signin_email_field(xml or "") if xml else None
+        if field:
+            log.info(
+                f"[Phone:{self.device}] Tìm thấy sign-in email field tại ({field['cx']},{field['cy']}) "
+                f"score={field.get('score')}"
+            )
+            x_pct, y_pct = await self._device_point_to_percent(field["cx"], field["cy"])
+            return await self._type_and_verify(
+                email,
+                max(0.0, x_pct - 4.0), min(100.0, x_pct + 4.0),
+                max(0.0, y_pct - 2.5), min(100.0, y_pct + 2.5),
+                description="Ô Email sign-in",
+                is_password=False,
+            )
+
+        log.warning(f"[Phone:{self.device}] Không định vị được sign-in email field chuyên dụng, fallback bbox")
+        return await self._type_and_verify(
+            email,
+            10, 90, 28, 42,
+            description="Ô Email sign-in",
+            is_password=False,
+        )
+
     async def _type_into_labeled_field(
         self,
         text: str,
@@ -1102,39 +1451,13 @@ class PhoneRegistrationBot:
         """
         Sau khi click CTA, xác minh bot đã sang sign-in/create-account flow thật.
         """
-        expected_markers = [
-            "メールアドレス",
-            "Email",
-            "sign in",
-            "サインイン",
-            "アカウントを作成",
-            "Create account",
-            "パスワード",
-            "Password",
-        ]
-        xml = await self._wait_for_state(
-            expected_markers,
-            timeout=6.0,
+        state, xml, reason = await self._wait_for_account_surface(
+            ["signin_entry", "create_account_prompt", "register_form", "password_login"],
+            timeout=7.0,
             step_name="step2_wait_post_cta_state",
         )
-        if not xml:
-            xml = await self.screen_reader.dump_ui(self.device)
-
         if xml:
             xml_lower = xml.lower()
-            nodes = self.screen_reader._parse_nodes(xml)
-            input_nodes = [node for node in nodes if "edittext" in node["class"].lower()]
-            has_email_marker = any(marker.lower() in xml_lower for marker in ["メールアドレス", "email", "サインイン", "sign in"])
-            has_account_create_marker = any(marker.lower() in xml_lower for marker in ["アカウントを作成", "create account"])
-            has_password_marker = any(marker.lower() in xml_lower for marker in ["パスワード", "password"])
-
-            if has_email_marker and input_nodes:
-                return True, f"Đã chuyển sang sign-in flow với {len(input_nodes)} input field(s)", xml
-            if has_account_create_marker and input_nodes:
-                return True, f"Đã chuyển sang create-account flow với {len(input_nodes)} input field(s)", xml
-            if has_password_marker and len(input_nodes) >= 2:
-                return True, f"Đã chuyển sang password/account flow với {len(input_nodes)} input field(s)", xml
-
             if any(marker in xml_lower for marker in [
                 "amazonポイント",
                 "ポイント",
@@ -1144,9 +1467,11 @@ class PhoneRegistrationBot:
                 "pokemon",
                 "pikachu",
             ]):
-                return False, "Sau click CTA bot đã sang trang info/help khác, không phải sign-in flow", xml
+                return False, "Sau click CTA bot đã sang trang info/help khác, không phải account flow", xml
 
-        return False, "Không xác nhận được form/account flow thật sau khi bấm CTA", xml
+        if state in {"signin_entry", "create_account_prompt", "register_form", "password_login"}:
+            return True, reason, xml
+        return False, reason, xml
 
     async def _open_request_invitation_flow(self) -> tuple[bool, str, Optional[str]]:
         """
@@ -1366,69 +1691,92 @@ class PhoneRegistrationBot:
                 result["note"] = "Stopped by user"
                 return result
 
-            log.info(f"[Phone:{self.device}] Step 3 – Nhập email vào form đăng nhập...")
-            await self._screenshot_step("step3a_login_form")
-            email_ok = await self._type_into_labeled_field(
-                row["email"],
-                ["メールアドレス", "Email address", "Email", "メール"],
-                description="Ô Email",
-                fallback_bbox=(40, 60, 38, 42),
+            initial_surface, initial_surface_reason = self._classify_account_surface(login_xml or "")
+            log.info(
+                f"[Phone:{self.device}] Account surface sau CTA: state='{initial_surface}' ({initial_surface_reason})"
             )
-            if not email_ok:
-                result["note"] = "Không nhập được email vào form đăng nhập"
-                await self._screenshot_step("step3_FAILED_email_input")
-                return result
 
-            continue_ok = await self._tap_best_element_with_scroll_search(
-                texts=["続行", "Continue", "次へ", "サインイン"],
-                description="Nút Continue",
-                max_scrolls=1,
-                clickable=True,
-                preferred_region=(30, 70, 45, 80),
-            )
-            if not continue_ok:
-                result["note"] = "Không tìm thấy nút Continue sau khi nhập email"
-                await self._screenshot_step("step3_FAILED_continue_not_found")
-                return result
+            register_form_xml = None
+            if initial_surface == "register_form":
+                log.info(f"[Phone:{self.device}] Bỏ qua Step 3/4 vì bot đã vào thẳng form đăng ký")
+                register_form_xml = login_xml
+            else:
+                if initial_surface != "signin_entry":
+                    result["note"] = f"Sau CTA không vào đúng sign-in entry: {initial_surface_reason}"
+                    await self._screenshot_step("step3_FAILED_unexpected_surface_before_email")
+                    return result
 
-            # Đợi màn hình tiếp theo (Create Account hoặc password form)
-            post_continue_xml = await self._wait_for_state(
-                ["アカウントを作成", "Create account", "パスワード", "Password"],
-                timeout=8.0, step_name="step3_wait_after_continue"
-            )
-            if not post_continue_xml:
-                result["note"] = "Không xác nhận được màn hình sau bước Continue"
-                await self._screenshot_step("step3_FAILED_post_continue_state")
-                return result
-            await self._screenshot_step("step3b_after_continue")
+                log.info(f"[Phone:{self.device}] Step 3 – Nhập email vào form đăng nhập...")
+                await self._screenshot_step("step3a_login_form")
+                email_ok = await self._type_into_signin_email_field(row["email"])
+                if not email_ok:
+                    result["note"] = "Không nhập được email vào form sign-in"
+                    await self._screenshot_step("step3_FAILED_email_input")
+                    return result
+
+                continue_ok = await self._tap_signin_continue_button()
+                if not continue_ok:
+                    result["note"] = "Không tìm thấy nút Continue đúng trên màn sign-in"
+                    await self._screenshot_step("step3_FAILED_continue_not_found")
+                    return result
+
+                post_continue_state, post_continue_xml, post_continue_reason = await self._wait_for_account_surface(
+                    ["create_account_prompt", "register_form", "password_login", "signin_entry"],
+                    timeout=8.0,
+                    step_name="step3_wait_after_continue",
+                )
+                log.info(
+                    f"[Phone:{self.device}] Surface sau Continue: state='{post_continue_state}' ({post_continue_reason})"
+                )
+                await self._screenshot_step("step3b_after_continue")
+
+                if post_continue_state == "register_form":
+                    register_form_xml = post_continue_xml
+                elif post_continue_state == "password_login":
+                    result["note"] = "Email đang rơi vào màn password login, không phải luồng tạo account mới"
+                    await self._screenshot_step("step3_FAILED_password_login_surface")
+                    return result
+                elif post_continue_state != "create_account_prompt":
+                    result["note"] = f"Không xác nhận được màn hình sau bước Continue: {post_continue_reason}"
+                    await self._screenshot_step("step3_FAILED_post_continue_state")
+                    return result
 
             # ── STEP 4: Tạo tài khoản ──────────────────────────
             if self.should_stop:
                 result["note"] = "Stopped by user"
                 return result
 
-            log.info(f"[Phone:{self.device}] Step 4 – Click tạo tài khoản mới...")
-            create_ok = await self._tap_best_element_with_scroll_search(
-                texts=["アカウントを作成", "Create account", "新規登録"],
-                description="Nút Create Account",
-                max_scrolls=1,
-                clickable=True,
-                preferred_region=(25, 75, 35, 85),
-            )
-            if not create_ok:
-                result["note"] = "Không tìm thấy nút Create Account"
-                await self._screenshot_step("step4_FAILED_create_account_not_found")
-                return result
-
-            # Đợi form đăng ký (có ô Tên)
-            register_form_xml = await self._wait_for_state(
-                ["お名前", "氏名", "名前", "Your name", "First name"],
-                timeout=8.0, step_name="step4_wait_register_form"
-            )
             if not register_form_xml:
-                result["note"] = "Không xác nhận được form đăng ký sau khi bấm Create Account"
-                await self._screenshot_step("step4_FAILED_register_form_not_found")
-                return result
+                log.info(f"[Phone:{self.device}] Step 4 – Click tạo tài khoản mới...")
+                create_ok = await self._tap_best_element_with_scroll_search(
+                    texts=["アカウントを作成", "Create account", "新規登録"],
+                    description="Nút Create Account",
+                    max_scrolls=0,
+                    clickable=None,
+                    preferred_region=(20, 85, 30, 85),
+                )
+                if not create_ok:
+                    result["note"] = "Không tìm thấy nút Create Account đúng trên account surface"
+                    await self._screenshot_step("step4_FAILED_create_account_not_found")
+                    return result
+
+                register_state, register_form_xml, register_reason = await self._wait_for_account_surface(
+                    ["register_form", "password_login"],
+                    timeout=8.0,
+                    step_name="step4_wait_register_form",
+                )
+                log.info(
+                    f"[Phone:{self.device}] Surface sau Create Account: state='{register_state}' ({register_reason})"
+                )
+                if register_state == "password_login":
+                    result["note"] = "Sau khi bấm Create Account vẫn rơi vào password login, chưa sang form đăng ký"
+                    await self._screenshot_step("step4_FAILED_password_surface")
+                    return result
+                if register_state != "register_form" or not register_form_xml:
+                    result["note"] = f"Không xác nhận được form đăng ký sau khi bấm Create Account: {register_reason}"
+                    await self._screenshot_step("step4_FAILED_register_form_not_found")
+                    return result
+
             await self._screenshot_step("step4_create_account_form")
 
             # ── STEP 5: Điền form đăng ký ─────────────────────────────
