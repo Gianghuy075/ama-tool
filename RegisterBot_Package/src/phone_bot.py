@@ -249,6 +249,75 @@ class PhoneRegistrationBot:
         ]
         return any(marker in xml_lower for marker in markers)
 
+    def _is_chrome_loading_screen(self, xml: str) -> bool:
+        """
+        Nhận diện trạng thái Chrome đang mở nhưng chưa render được product page.
+        """
+        if not xml:
+            return False
+        xml_lower = xml.lower()
+        loading_markers = [
+            "chrome",
+            "đang tải",
+            "loading",
+            "reload",
+            "làm mới",
+            "refresh",
+        ]
+        product_markers = [
+            "amazon.co.jp",
+            "request invite",
+            "招待をリクエスト",
+            "￥",
+            "¥",
+            "pokemon card game",
+            "available by invitation",
+            "amazon mastercard",
+        ]
+        if any(marker in xml_lower for marker in product_markers):
+            return False
+
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return True
+
+        visible_texts = [
+            ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip()).lower()
+            for node in nodes
+        ]
+        visible_texts = [text for text in visible_texts if text]
+
+        if any(marker in " ".join(visible_texts) for marker in loading_markers):
+            return True
+
+        # Nếu rất ít text có nghĩa và toàn package Chrome thì coi là loading screen.
+        chrome_nodes = [node for node in nodes if "chrome" in (node.get("package") or "").lower()]
+        if chrome_nodes and len(visible_texts) <= 3:
+            return True
+        return False
+
+    async def _recover_chrome_loading_if_needed(self, browser_package: str, target_url: str) -> bool:
+        """
+        Nếu Chrome bị kẹt ở splash/loading screen sau khi mở URL, chủ động reopen/reload URL.
+        """
+        if browser_package != "com.android.chrome":
+            return False
+
+        for attempt in range(2):
+            xml = await self.screen_reader.dump_ui(self.device)
+            if not self._is_chrome_loading_screen(xml or ""):
+                return False
+
+            log.warning(
+                f"[Phone:{self.device}] Phát hiện Chrome loading/splash screen (attempt {attempt + 1}/2), "
+                "thử reopen URL để ép reload"
+            )
+            reopen_ok = await self.xw.open_url(self.device, target_url, browser_package)
+            log.info(f"[Phone:{self.device}] reopen_url during loading recovery: {'OK' if reopen_ok else 'FAIL'}")
+            await self._delay(1.2, 1.8)
+
+        return True
+
     async def _dismiss_chrome_first_run_if_needed(self, browser_package: str, target_url: str) -> bool:
         """
         Xử lý các màn hình first-run/onboarding của Chrome sau khi clear data.
@@ -1148,6 +1217,7 @@ class PhoneRegistrationBot:
                 open_ok = await self.xw.open_url(self.device, unique_url, chosen_browser)
                 log.info(f"[Phone:{self.device}] open_url result: {'OK' if open_ok else 'FAIL'}")
                 await self._dismiss_chrome_first_run_if_needed(chosen_browser, unique_url)
+                await self._recover_chrome_loading_if_needed(chosen_browser, unique_url)
 
                 page_verified, verify_reason, verify_xml = await self._verify_expected_product_page(
                     expected_host=expected_host,
