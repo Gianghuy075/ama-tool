@@ -54,6 +54,11 @@ in_progress
     - nhập đúng ô `Enter mobile number or email`
     - bấm đúng nút vàng `Continue`
     - phân biệt rõ `create_account_prompt` / `register_form` / `password_login`
+  - retest lại `product CTA search` với patch mới:
+    - nhận `Request invite`/`Available by invitation`
+    - không scroll preset mù
+    - dùng short-sweep có overlap
+    - log viewport signature để biết bot đã quét tới đâu
   - runtime verify app open/start
   - runtime verify tap/swipe/type_text
   - end-to-end 1 account

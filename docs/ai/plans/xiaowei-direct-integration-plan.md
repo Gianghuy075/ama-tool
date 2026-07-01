@@ -599,6 +599,13 @@ Kết luận:
     - finder riêng cho ô `Enter mobile number or email`
     - finder riêng cho nút vàng `Continue` theo `field anchor -> button below field`
     - chặn bot đi tiếp nếu sau `Continue` rơi vào `password login` thay vì `create account/register form`
+  - patch mới tiếp theo cho CTA product page:
+    - thêm variant English `Request invite`
+    - thêm anchor English `Available by invitation`
+    - bỏ `scroll mù` kiểu preset cho bước CTA
+    - dùng `short-sweep` có overlap lớn để quét viewport
+    - có `viewport signature` để phát hiện scroll lặp/không đổi
+    - thêm `first-fold CTA probe` trước khi cho phép scroll xuống
 
 #### Wave 4 - Hardening production
 

@@ -180,6 +180,7 @@ class PhoneRegistrationBot:
             "招待をリクエストする",
             "招待をリクエスト",
             "Request Invitation",
+            "Request invite",
             "Invitation",
         ]
         product_page_markers = [
@@ -197,6 +198,7 @@ class PhoneRegistrationBot:
             "レビュー",
             "検索",
             "検索する",
+            "Available by invitation",
         ]
         xml = await self._wait_for_state(
             strong_markers + amazon_host_markers + product_page_markers,
@@ -561,6 +563,27 @@ class PhoneRegistrationBot:
             await self.xw.swipe(self.device, "up")  # swipe up = scroll down
             await self._delay(0.3, 0.6)
 
+    async def _scroll_short_overlap_down(self, step_index: int = 0) -> bool:
+        """
+        Scroll ngắn có overlap lớn để quét product page mà không nhảy qua CTA.
+        Không dùng swipe preset mù của XiaoWei cho bước tìm CTA.
+        """
+        # Mỗi nhịp chỉ dịch khoảng 14-18% viewport để giữ overlap.
+        swipe_plan = [
+            (0.50, 0.78, 0.50, 0.63, 320),
+            (0.50, 0.76, 0.50, 0.61, 320),
+            (0.50, 0.74, 0.50, 0.60, 320),
+            (0.50, 0.72, 0.50, 0.58, 320),
+        ]
+        x1, y1, x2, y2, duration = swipe_plan[min(step_index, len(swipe_plan) - 1)]
+        log.info(
+            f"[Phone:{self.device}] CTA short-sweep scroll step={step_index + 1}: "
+            f"({x1:.2f},{y1:.2f}) -> ({x2:.2f},{y2:.2f}) duration={duration}ms"
+        )
+        ok = await self.xw.swipe_custom(self.device, x1, y1, x2, y2, duration=duration)
+        await self._delay(0.5, 0.9)
+        return ok
+
     async def _wait_page_load(self, seconds: float = 3.0):
         """Đợi trang load."""
         await asyncio.sleep(seconds)
@@ -781,8 +804,22 @@ class PhoneRegistrationBot:
         Chỉ nhắm đúng CTA vàng `招待をリクエストする` trên product page.
         Tránh click nhầm vào link/info block có text gần giống.
         """
-        for attempt in range(4):
+        seen_signatures = set()
+        max_scroll_steps = 5
+
+        for attempt in range(max_scroll_steps + 1):
             xml = await self.screen_reader.dump_ui(self.device)
+            if not xml:
+                log.warning(f"[Phone:{self.device}] dump_ui rỗng trong lúc tìm CTA, thử lại")
+                continue
+
+            signature = self._build_viewport_signature(xml)
+            if signature in seen_signatures and attempt > 0:
+                log.warning(
+                    f"[Phone:{self.device}] Viewport signature lặp lại ở CTA search attempt={attempt}: {signature[:120]}"
+                )
+            seen_signatures.add(signature)
+
             elem = self._find_request_invitation_candidate(xml or "")
             if elem:
                 log.info(
@@ -814,13 +851,44 @@ class PhoneRegistrationBot:
                 await self._tap_request_invitation_from_anchor(anchor)
                 return True, "anchor_fallback"
 
-            if attempt < 3:
-                log.info(
-                    f"[Phone:{self.device}] Chưa tìm được CTA vàng hợp lệ, cuộn thêm 1 nhịp "
-                    f"(attempt {attempt + 1}/3)"
+            first_fold_probe = self._find_first_fold_cta_probe(xml)
+            if first_fold_probe:
+                log.warning(
+                    f"[Phone:{self.device}] Không có exact CTA/anchor nhưng có first-fold CTA probe tại "
+                    f"({first_fold_probe['cx']},{first_fold_probe['cy']}) score={first_fold_probe.get('score')}"
                 )
-                await self._scroll_down(1)
-                await self._delay(0.8, 1.5)
+                await self.xw.device_click(self.device, first_fold_probe["cx"], first_fold_probe["cy"])
+                await self._delay()
+                return True, "first_fold_probe"
+
+            if attempt < max_scroll_steps:
+                log.info(
+                    f"[Phone:{self.device}] Chưa tìm được CTA vàng hợp lệ trong viewport hiện tại, "
+                    f"short-sweep thêm 1 nhịp có overlap (attempt {attempt + 1}/{max_scroll_steps})"
+                )
+                prev_xml = xml
+                await self._scroll_short_overlap_down(attempt)
+                new_xml = await self.screen_reader.wait_for_ui_change(
+                    self.device,
+                    prev_xml,
+                    timeout=4.0,
+                    poll_interval=0.4,
+                )
+                if new_xml:
+                    new_signature = self._build_viewport_signature(new_xml)
+                    log.info(
+                        f"[Phone:{self.device}] CTA search viewport đổi sang signature: {new_signature[:140]}"
+                    )
+                    if new_signature == signature:
+                        log.warning(
+                            f"[Phone:{self.device}] Short-sweep không đổi viewport đủ rõ, dừng để tránh scroll mù"
+                        )
+                        break
+                else:
+                    log.warning(
+                        f"[Phone:{self.device}] Short-sweep không tạo được UI change rõ ràng, dừng CTA search"
+                    )
+                    break
 
         log.error(f"[Phone:{self.device}] Không tìm được CTA vàng '招待をリクエストする' hợp lệ")
         return False, "not_found"
@@ -853,12 +921,17 @@ class PhoneRegistrationBot:
         anchor_texts = [
             "招待された方のみご購入いただけます",
             "本商品は招待販売としており",
+            "available by invitation",
+            "high-demand item with limited quantities",
+            "we won't be able to grant all requests",
+            "we won’t be able to grant all requests",
         ]
         for node in nodes:
             visible_text = ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
             if not visible_text:
                 continue
-            if not any(anchor_text in visible_text for anchor_text in anchor_texts):
+            visible_text_lower = visible_text.lower()
+            if not any(anchor_text in visible_text_lower for anchor_text in anchor_texts):
                 continue
 
             y_pct = (node["cy"] / max(1, screen_h)) * 100.0
@@ -882,6 +955,92 @@ class PhoneRegistrationBot:
             f"score={best['score']} text='{best['visible_text'][:40]}'"
         )
         return best
+
+    def _find_first_fold_cta_probe(self, xml: str) -> Optional[dict]:
+        """
+        Probe CTA chính ở first-fold khi XML không lộ text CTA rõ ràng.
+        Chỉ dùng trên product page có marker invitation; sau click vẫn phải verify state.
+        """
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return None
+
+        xml_lower = (xml or "").lower()
+        invitation_context_markers = [
+            "招待",
+            "request invitation",
+            "request invite",
+            "available by invitation",
+        ]
+        if not any(marker in xml_lower for marker in invitation_context_markers):
+            return None
+
+        screen_w = max(node["x2"] for node in nodes)
+        screen_h = max(node["y2"] for node in nodes)
+        candidates = []
+
+        for node in nodes:
+            if not node["enabled"]:
+                continue
+
+            visible_text = self._node_visible_text(node)
+            visible_text_lower = visible_text.lower()
+            x_pct = (node["cx"] / max(1, screen_w)) * 100.0
+            y_pct = (node["cy"] / max(1, screen_h)) * 100.0
+            width_pct = (node["width"] / max(1, screen_w)) * 100.0
+            height_pct = (node["height"] / max(1, screen_h)) * 100.0
+
+            if not (18.0 <= x_pct <= 82.0):
+                continue
+            if not (45.0 <= y_pct <= 82.0):
+                continue
+            if width_pct < 48.0:
+                continue
+            if not (2.0 <= height_pct <= 11.0):
+                continue
+
+            if visible_text and any(noise in visible_text_lower for noise in [
+                "buying for work", "need help", "see details", "privacy notice", "conditions of use",
+                "ほしい物", "ショッピングカート",
+            ]):
+                continue
+
+            score = 80.0
+            if node["clickable"]:
+                score += 22.0
+            if "button" in node["class"].lower():
+                score += 20.0
+            if 65.0 <= width_pct <= 96.0:
+                score += 35.0
+            elif width_pct >= 58.0:
+                score += 20.0
+            if 55.0 <= y_pct <= 76.0:
+                score += 25.0
+            if self._text_matches_any(visible_text, ["招待をリクエストする", "招待をリクエスト", "Request Invitation", "Request invite"], partial=True):
+                score += 100.0
+            elif not visible_text:
+                score += 10.0
+
+            candidates.append({
+                **node,
+                "visible_text": visible_text,
+                "score": round(score, 2),
+                "x_pct": round(x_pct, 2),
+                "y_pct": round(y_pct, 2),
+                "width_pct": round(width_pct, 2),
+            })
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        preview = [
+            f"({c['cx']},{c['cy']}) score={c['score']} y={c['y_pct']} width={c['width_pct']} text={c.get('visible_text','')[:30]}"
+            for c in candidates[:3]
+        ]
+        log.info(f"[Phone:{self.device}] First-fold CTA probe candidates: {' | '.join(preview)}")
+        best = candidates[0]
+        return best if best["score"] >= 125.0 else None
 
     def _find_cta_below_anchor(self, xml: str, anchor: dict) -> Optional[dict]:
         """
@@ -960,7 +1119,7 @@ class PhoneRegistrationBot:
 
         screen_w = max(node["x2"] for node in nodes)
         screen_h = max(node["y2"] for node in nodes)
-        targets = ["招待をリクエストする", "招待をリクエスト", "Request Invitation"]
+        targets = ["招待をリクエストする", "招待をリクエスト", "Request Invitation", "Request invite"]
         button_like_classes = {
             "android.widget.button",
             "android.widget.textview",
@@ -998,6 +1157,8 @@ class PhoneRegistrationBot:
             elif visible_text == "招待をリクエスト":
                 score += 110.0
             elif visible_text_lower == "request invitation":
+                score += 100.0
+            elif visible_text_lower == "request invite":
                 score += 100.0
             else:
                 score += 75.0
@@ -1072,6 +1233,34 @@ class PhoneRegistrationBot:
             if partial and pattern_lower in value_lower:
                 return True
         return False
+
+    def _build_viewport_signature(self, xml: str) -> str:
+        """
+        Tạo signature nhẹ của viewport hiện tại để phát hiện scroll lặp hoặc chưa đổi màn.
+        """
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return "empty"
+
+        screen_h = max(node["y2"] for node in nodes)
+        parts = []
+        ignored = {
+            "amazon.co.jp", "amazon", "chrome", "home", "back", "menu",
+            "search", "検索", "english", "japan",
+        }
+        for node in nodes:
+            visible_text = self._node_visible_text(node)
+            if not visible_text:
+                continue
+            cleaned = visible_text.strip().lower()
+            if len(cleaned) < 2 or cleaned in ignored:
+                continue
+            y_bucket = int(((node["cy"] / max(1, screen_h)) * 100.0) // 8)
+            parts.append(f"{cleaned[:24]}@{y_bucket}")
+            if len(parts) >= 10:
+                break
+
+        return "|".join(parts) if parts else "no_text"
 
     def _classify_account_surface(self, xml: str) -> tuple[str, str]:
         """

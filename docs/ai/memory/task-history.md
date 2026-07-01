@@ -182,6 +182,30 @@
   - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
   - pass
 
+## 2026-07-01 - CTA viewport search tightened for Amazon mobile web
+
+- New runtime evidence showed the Step 2 CTA search still failed because the fallback path was effectively:
+  - no trustworthy CTA node
+  - no anchor
+  - preset swipe down the page
+  - retry
+- That was too loose for the Amazon mobile web product page because one large swipe can jump past the yellow CTA right below the product block.
+- Fix implemented in `RegisterBot_Package/src/phone_bot.py`:
+  - added English CTA variants:
+    - `Request invite`
+    - `Available by invitation`
+  - added English invitation anchors for the product page info block
+  - replaced preset CTA-search scrolling with `short-sweep` custom swipes that preserve heavy viewport overlap
+  - added `viewport signature` logging to detect repeated/unchanged scroll states
+  - added `first-fold CTA probe` before allowing any downward scroll
+- Practical intent:
+  - scan the current viewport more aggressively first
+  - only move the page in short, controlled steps
+  - stop if the viewport does not actually change, instead of continuing blind scroll
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
+  - pass
+
 ## Mục tiêu
 
 Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user hoặc AI Agent.
