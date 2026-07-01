@@ -531,50 +531,125 @@ class PhoneRegistrationBot:
         Chỉ nhắm đúng CTA vàng `招待をリクエストする` trên product page.
         Tránh click nhầm vào link/info block có text gần giống.
         """
-        exact_region = (8, 92, 58, 86)
-        loose_region = (8, 92, 50, 90)
-        button_like_classes = [
-            "android.widget.Button",
-            "android.widget.TextView",
-            "android.view.View",
+        for attempt in range(4):
+            xml = await self.screen_reader.dump_ui(self.device)
+            elem = self._find_request_invitation_candidate(xml or "")
+            if elem:
+                log.info(
+                    f"[Phone:{self.device}] CTA candidate tốt nhất tại ({elem['cx']},{elem['cy']}) "
+                    f"score={elem.get('score')} width_pct={elem.get('width_pct')} y_pct={elem.get('y_pct')} "
+                    f"text='{elem.get('text', '')[:40]}'"
+                )
+                await self.xw.device_click(self.device, elem["cx"], elem["cy"])
+                await self._delay()
+                return True
+
+            if attempt < 3:
+                log.info(
+                    f"[Phone:{self.device}] Chưa tìm được CTA vàng hợp lệ, cuộn thêm 1 nhịp "
+                    f"(attempt {attempt + 1}/3)"
+                )
+                await self._scroll_down(1)
+                await self._delay(0.8, 1.5)
+
+        log.error(f"[Phone:{self.device}] Không tìm được CTA vàng '招待をリクエストする' hợp lệ")
+        return False
+
+    def _find_request_invitation_candidate(self, xml: str) -> Optional[dict]:
+        """
+        Chọn node giống nút vàng CTA nhất dựa trên text + hình học màn hình.
+        Mục tiêu là loại các node text trùng nhưng nằm ở vùng info/footer.
+        """
+        nodes = self.screen_reader._parse_nodes(xml)
+        if not nodes:
+            return None
+
+        screen_w = max(node["x2"] for node in nodes)
+        screen_h = max(node["y2"] for node in nodes)
+        targets = ["招待をリクエストする", "招待をリクエスト", "Request Invitation"]
+        button_like_classes = {
+            "android.widget.button",
+            "android.widget.textview",
+            "android.view.view",
+        }
+
+        candidates = []
+        for node in nodes:
+            raw_text = (node.get("text") or node.get("content_desc") or "").strip()
+            if not raw_text:
+                continue
+
+            raw_text_lower = raw_text.lower()
+            if not any(target.lower() in raw_text_lower for target in targets):
+                continue
+
+            x_pct = (node["cx"] / max(1, screen_w)) * 100.0
+            y_pct = (node["cy"] / max(1, screen_h)) * 100.0
+            width_pct = (node["width"] / max(1, screen_w)) * 100.0
+            height_pct = (node["height"] / max(1, screen_h)) * 100.0
+
+            score = 0.0
+            if raw_text == "招待をリクエストする":
+                score += 140.0
+            elif raw_text == "招待をリクエスト":
+                score += 110.0
+            elif raw_text_lower == "request invitation":
+                score += 100.0
+            else:
+                score += 75.0
+
+            if node["clickable"]:
+                score += 25.0
+            if node["enabled"]:
+                score += 10.0
+            if node["class"].lower() in button_like_classes:
+                score += 12.0
+
+            if 55.0 <= y_pct <= 80.0:
+                score += 35.0
+            elif 50.0 <= y_pct <= 86.0:
+                score += 10.0
+            else:
+                score -= 60.0
+
+            if width_pct >= 65.0:
+                score += 40.0
+            elif width_pct >= 50.0:
+                score += 25.0
+            elif width_pct >= 35.0:
+                score += 5.0
+            else:
+                score -= 35.0
+
+            if 2.0 <= height_pct <= 8.0:
+                score += 12.0
+            elif height_pct > 12.0:
+                score -= 10.0
+
+            if 15.0 <= x_pct <= 85.0:
+                score += 10.0
+
+            candidate = {
+                **node,
+                "score": round(score, 2),
+                "x_pct": round(x_pct, 2),
+                "y_pct": round(y_pct, 2),
+                "width_pct": round(width_pct, 2),
+                "height_pct": round(height_pct, 2),
+            }
+            candidates.append(candidate)
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        top_preview = [
+            f"({c['cx']},{c['cy']}) score={c['score']} y={c['y_pct']} width={c['width_pct']} text={c.get('text','')[:20]}"
+            for c in candidates[:3]
         ]
-
-        # Pass 1: exact/near-exact Japanese CTA ở vùng nút vàng.
-        found = await self._tap_best_element_with_scroll_search(
-            texts=["招待をリクエストする"],
-            description="CTA 招待をリクエストする",
-            max_scrolls=3,
-            clickable=True,
-            classes=button_like_classes,
-            preferred_region=exact_region,
-            partial=False,
-        )
-        if found:
-            return True
-
-        # Pass 2: partial Japanese CTA nhưng vẫn khóa vùng CTA và class hợp lệ.
-        found = await self._tap_best_element_with_scroll_search(
-            texts=["招待をリクエストする", "招待をリクエスト"],
-            description="CTA 招待をリクエストする",
-            max_scrolls=4,
-            clickable=True,
-            classes=button_like_classes,
-            preferred_region=loose_region,
-            partial=True,
-        )
-        if found:
-            return True
-
-        # Pass 3: fallback English exact nhưng vẫn chỉ trong vùng CTA.
-        return await self._tap_best_element_with_scroll_search(
-            texts=["Request Invitation"],
-            description="CTA Request Invitation",
-            max_scrolls=2,
-            clickable=True,
-            classes=button_like_classes,
-            preferred_region=loose_region,
-            partial=False,
-        )
+        log.info(f"[Phone:{self.device}] CTA candidates: {' | '.join(top_preview)}")
+        best = candidates[0]
+        return best if best["score"] >= 120.0 else None
 
     async def _type_into_labeled_field(
         self,
@@ -617,6 +692,44 @@ class PhoneRegistrationBot:
 
         log.error(f"[Phone:{self.device}] Không tìm thấy field '{description or label_texts[0]}'")
         return False
+
+    async def _verify_post_request_invitation_state(self) -> tuple[bool, str, Optional[str]]:
+        """
+        Sau khi click CTA, xác minh bot đã sang sign-in/create-account flow thật.
+        """
+        expected_markers = [
+            "メールアドレス",
+            "Email",
+            "sign in",
+            "サインイン",
+            "アカウントを作成",
+            "Create account",
+            "パスワード",
+            "Password",
+        ]
+        xml = await self._wait_for_state(
+            expected_markers,
+            timeout=6.0,
+            step_name="step2_wait_post_cta_state",
+        )
+        if not xml:
+            xml = await self.screen_reader.dump_ui(self.device)
+
+        if xml:
+            xml_lower = xml.lower()
+            if any(marker.lower() in xml_lower for marker in expected_markers):
+                return True, "Đã chuyển sang sign-in/create-account flow", xml
+
+            if any(marker in xml_lower for marker in [
+                "amazonポイント",
+                "ポイント",
+                "ヘルプ",
+                "詳細はこちら",
+                "マイポイント",
+            ]):
+                return False, "Sau click CTA bot đã sang trang info/help khác, không phải sign-in flow", xml
+
+        return False, "Không xác nhận được state sau khi bấm CTA", xml
 
     async def _device_point_to_percent(self, x: int, y: int) -> tuple[float, float]:
         """Chuyển tọa độ pixel thật thành % màn hình để tái dùng helper hiện có."""
@@ -727,14 +840,17 @@ class PhoneRegistrationBot:
         try:
             # ── Browser Rotation ──────────────────────────────────
             installed = await self.get_installed_browsers()
-            if not installed:
+            if "com.android.chrome" in installed:
+                chosen_browser = "com.android.chrome"
+                log.info(f"[Phone:{self.device}] Khóa browser ổn định cho flow Amazon: {chosen_browser}")
+            elif installed:
+                chosen_browser = installed[0]
+                log.warning(
+                    f"[Phone:{self.device}] Không có Chrome, fallback sang browser đầu tiên đã cài: {chosen_browser}"
+                )
+            else:
                 log.warning(f"[Phone:{self.device}] Không tìm thấy trình duyệt nào hỗ trợ, dùng mặc định Chrome")
                 chosen_browser = "com.android.chrome"
-            else:
-                # Luân phiên (round-robin) trình duyệt
-                PhoneRegistrationBot._rotation_index = (PhoneRegistrationBot._rotation_index + 1) % len(installed)
-                chosen_browser = installed[PhoneRegistrationBot._rotation_index]
-                log.info(f"[Phone:{self.device}] Trình duyệt luân phiên được chọn: {chosen_browser}")
 
             # ── STEP 1: Xóa Sạch Dấu Vết (Clear Data) ──────────────────────────
             log.info(f"[Phone:{self.device}] Step 1 – Xóa sạch dữ liệu & Chuẩn bị trình duyệt...")
@@ -796,13 +912,14 @@ class PhoneRegistrationBot:
                 await self._screenshot_step("step2_FAILED_request_invitation_not_found")
                 return result
 
-            # Đợi form login xuất hiện (email field)
-            login_xml = await self._wait_for_state(
-                ["メールアドレス", "Email", "sign in", "サインイン"],
-                timeout=8.0, step_name="step2_wait_login_form"
-            )
-            if not login_xml:
-                result["note"] = "Không xác nhận được form đăng nhập sau khi bấm Request Invitation"
+            # Đợi flow đăng nhập / tạo account xuất hiện sau click CTA
+            login_ok, login_reason, login_xml = await self._verify_post_request_invitation_state()
+            log.info(f"[Phone:{self.device}] Post-CTA verify: {login_reason}")
+            if not login_ok:
+                await self._screenshot_step("step2_post_cta_unexpected_state")
+                await self.xw.press_back(self.device)
+                await self._delay(0.8, 1.2)
+                result["note"] = login_reason
                 await self._screenshot_step("step2_FAILED_login_form_not_found")
                 return result
             await self._screenshot_step("step2_after_request_invitation")
