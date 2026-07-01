@@ -852,12 +852,18 @@ class PhoneRegistrationBot:
                     await self._delay()
                     return True, "anchor_button_candidate"
 
-                log.warning(
-                    f"[Phone:{self.device}] Đã thấy invitation anchor '{anchor.get('visible_text', '')[:40]}' "
-                    "nhưng chưa có bounds CTA đáng tin; fallback tap theo anchor, không scroll tiếp"
-                )
-                await self._tap_request_invitation_from_anchor(anchor)
-                return True, "anchor_fallback"
+                if not self._has_valid_node_geometry(anchor, min_width=120, min_height=20):
+                    log.warning(
+                        f"[Phone:{self.device}] Bỏ qua anchor fallback vì anchor geometry không hợp lệ: "
+                        f"bounds={anchor.get('raw_bounds')} size=({anchor.get('width')},{anchor.get('height')})"
+                    )
+                else:
+                    log.warning(
+                        f"[Phone:{self.device}] Đã thấy invitation anchor '{anchor.get('visible_text', '')[:40]}' "
+                        "nhưng chưa có bounds CTA đáng tin; fallback tap theo anchor, không scroll tiếp"
+                    )
+                    await self._tap_request_invitation_from_anchor(anchor)
+                    return True, "anchor_fallback"
 
             if attempt < 3:
                 log.info(
@@ -906,6 +912,8 @@ class PhoneRegistrationBot:
         for node in nodes:
             visible_text = ((node.get("text") or "").strip() or (node.get("content_desc") or "").strip())
             if not visible_text:
+                continue
+            if not self._has_valid_node_geometry(node, min_width=80, min_height=20):
                 continue
             visible_text_lower = visible_text.lower()
             if not any(anchor_text in visible_text_lower for anchor_text in anchor_texts):
@@ -1166,14 +1174,15 @@ class PhoneRegistrationBot:
         Sau khi click CTA, xác minh bot đã sang sign-in/create-account flow thật.
         """
         expected_markers = [
-            "メールアドレス",
-            "Email",
+            "enter mobile number or email",
+            "enter email or mobile phone number",
+            "メールアドレスまたは携帯電話番号",
+            "携帯電話番号またはeメール",
+            "sign in or create account",
             "sign in",
             "サインイン",
             "アカウントを作成",
             "Create account",
-            "パスワード",
-            "Password",
         ]
         xml = await self._wait_for_state(
             expected_markers,
@@ -1186,17 +1195,26 @@ class PhoneRegistrationBot:
         if xml:
             xml_lower = xml.lower()
             nodes = self.screen_reader._parse_nodes(xml)
-            input_nodes = [node for node in nodes if "edittext" in node["class"].lower()]
-            has_email_marker = any(marker.lower() in xml_lower for marker in ["メールアドレス", "email", "サインイン", "sign in"])
+            screen_h = max((node["y2"] for node in nodes), default=1)
+            input_nodes = [
+                node for node in nodes
+                if "edittext" in node["class"].lower()
+                and self._has_valid_node_geometry(node, min_width=120, min_height=24)
+                and 10.0 <= (node["cy"] / max(1, screen_h)) * 100.0 <= 75.0
+            ]
+            has_email_marker = any(marker.lower() in xml_lower for marker in [
+                "enter mobile number or email",
+                "enter email or mobile phone number",
+                "メールアドレスまたは携帯電話番号",
+                "携帯電話番号またはeメール",
+                "sign in or create account",
+                "サインイン",
+            ])
             has_account_create_marker = any(marker.lower() in xml_lower for marker in ["アカウントを作成", "create account"])
-            has_password_marker = any(marker.lower() in xml_lower for marker in ["パスワード", "password"])
-
             if has_email_marker and input_nodes:
                 return True, f"Đã chuyển sang sign-in flow với {len(input_nodes)} input field(s)", xml
             if has_account_create_marker and input_nodes:
                 return True, f"Đã chuyển sang create-account flow với {len(input_nodes)} input field(s)", xml
-            if has_password_marker and len(input_nodes) >= 2:
-                return True, f"Đã chuyển sang password/account flow với {len(input_nodes)} input field(s)", xml
 
             if any(marker in xml_lower for marker in [
                 "amazonポイント",
@@ -1433,9 +1451,15 @@ class PhoneRegistrationBot:
             await self._screenshot_step("step3a_login_form")
             email_ok = await self._type_into_labeled_field(
                 row["email"],
-                ["メールアドレス", "Email address", "Email", "メール"],
+                [
+                    "Enter mobile number or email",
+                    "Enter email or mobile phone number",
+                    "メールアドレスまたは携帯電話番号",
+                    "携帯電話番号またはEメール",
+                    "Email address",
+                ],
                 description="Ô Email",
-                fallback_bbox=(40, 60, 38, 42),
+                fallback_bbox=None,
             )
             if not email_ok:
                 result["note"] = "Không nhập được email vào form đăng nhập"
