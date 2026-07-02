@@ -78,7 +78,11 @@ Mục tiêu vận hành:
   - endpoint handbook tree đã xác định được nhưng site XiaoWei phản hồi không ổn định khi truy vấn sâu
   - screenshot-to-file của XiaoWei runtime trên máy Nhật chưa ghi file local dù API trả `SUCCESS`
   - `tap/swipe/type_text/open_app` và end-to-end registration vẫn cần runtime evidence
-  - flow Amazon thật hiện chưa ổn định ở lớp quan sát/runtime verify trên Chrome mobile web
+- flow Amazon thật hiện chưa ổn định ở lớp quan sát/runtime verify trên Chrome mobile web
+- cập nhật runtime mới nhất:
+  - Step 2 `Request invite` trên Chrome mobile web đã đi đúng sang sign-in flow
+  - Step 3 nhập email đã pass trên runtime thật
+  - blocker hiện tại đã dồn sang biến thể `Proceed to create an account` -> form `First and last name` -> `Verify email`
 
 ## Cách chia track để không lẫn
 
@@ -258,6 +262,22 @@ Phase này được chốt hoàn thành với assumption vận hành đã đư�
 - [x] Điền `xiaowei.api_url` theo assumption hiện tại `http://127.0.0.1:22222`
 - [x] Đặt `xiaowei.devices = all` để test ban đầu
 - [x] Đặt `xiaowei.otp_source = gmail`
+
+## Phase 5 - Runtime hardening theo flow thật
+
+### Runtime evidence mới nhất đã xác nhận
+
+- [x] Step 2 CTA `Request invite` có thể được bấm đúng trên Chrome mobile web
+- [x] Step 3 `Enter mobile number or email` có thể nhập đúng email
+- [x] Xác nhận runtime Amazon đang dùng biến thể:
+  - `Looks like you're new to Amazon`
+  - `Proceed to create an account`
+  - `First and last name`
+  - `Verify email`
+- [x] Đã vá code để cover biến thể trên trong `RegisterBot_Package/src/phone_bot.py`
+- [ ] Cần test lại trên máy Windows Nhật để xác nhận Step 4 pass
+- [ ] Cần test lại trên máy Windows Nhật để xác nhận Step 5 pass
+- [ ] Cần test lại trên máy Windows Nhật để xác nhận Step 6 pass và vào OTP screen thật
 - [x] Xác nhận Gmail OTP vẫn là luồng được dùng
 
 ### Cấu hình mục tiêu

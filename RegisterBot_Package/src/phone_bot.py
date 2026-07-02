@@ -1584,7 +1584,17 @@ class PhoneRegistrationBot:
 
             # Đợi màn hình tiếp theo (Create Account hoặc password form)
             post_continue_xml = await self._wait_for_state(
-                ["アカウントを作成", "Create account", "パスワード", "Password"],
+                [
+                    "アカウントを作成",
+                    "Create account",
+                    "パスワード",
+                    "Password",
+                    "Proceed to create an account",
+                    "Let's create an account using your email",
+                    "Looks like you're new to Amazon",
+                    "First and last name",
+                    "Verify email",
+                ],
                 timeout=8.0, step_name="step3_wait_after_continue"
             )
             if not post_continue_xml:
@@ -1598,28 +1608,48 @@ class PhoneRegistrationBot:
                 result["note"] = "Stopped by user"
                 return result
 
-            log.info(f"[Phone:{self.device}] Step 4 – Click tạo tài khoản mới...")
-            create_ok = await self._tap_best_element_with_scroll_search(
-                texts=["アカウントを作成", "Create account", "新規登録"],
-                description="Nút Create Account",
-                max_scrolls=1,
-                clickable=True,
-                preferred_region=(25, 75, 35, 85),
-            )
-            if not create_ok:
-                result["note"] = "Không tìm thấy nút Create Account"
-                await self._screenshot_step("step4_FAILED_create_account_not_found")
-                return result
+            register_form_markers = [
+                "お名前",
+                "氏名",
+                "名前",
+                "Your name",
+                "First name",
+                "First and last name",
+                "Verify email",
+                "Sign in instead",
+            ]
+            register_form_xml = None
+            if post_continue_xml and any(marker.lower() in post_continue_xml.lower() for marker in register_form_markers):
+                log.info(f"[Phone:{self.device}] Step 4 – Form tạo tài khoản đã hiện ngay sau Continue, bỏ qua click trung gian")
+                register_form_xml = post_continue_xml
+            else:
+                log.info(f"[Phone:{self.device}] Step 4 – Click tạo tài khoản mới...")
+                create_ok = await self._tap_best_element_with_scroll_search(
+                    texts=[
+                        "Proceed to create an account",
+                        "アカウントを作成",
+                        "Create account",
+                        "新規登録",
+                    ],
+                    description="Nút Create Account",
+                    max_scrolls=1,
+                    clickable=True,
+                    preferred_region=(20, 80, 35, 80),
+                )
+                if not create_ok:
+                    result["note"] = "Không tìm thấy nút Create Account"
+                    await self._screenshot_step("step4_FAILED_create_account_not_found")
+                    return result
 
-            # Đợi form đăng ký (có ô Tên)
-            register_form_xml = await self._wait_for_state(
-                ["お名前", "氏名", "名前", "Your name", "First name"],
-                timeout=8.0, step_name="step4_wait_register_form"
-            )
-            if not register_form_xml:
-                result["note"] = "Không xác nhận được form đăng ký sau khi bấm Create Account"
-                await self._screenshot_step("step4_FAILED_register_form_not_found")
-                return result
+                # Đợi form đăng ký (có ô Tên / Verify email)
+                register_form_xml = await self._wait_for_state(
+                    register_form_markers,
+                    timeout=8.0, step_name="step4_wait_register_form"
+                )
+                if not register_form_xml:
+                    result["note"] = "Không xác nhận được form đăng ký sau khi bấm Create Account"
+                    await self._screenshot_step("step4_FAILED_register_form_not_found")
+                    return result
             await self._screenshot_step("step4_create_account_form")
 
             # ── STEP 5: Điền form đăng ký ─────────────────────────────
@@ -1630,7 +1660,7 @@ class PhoneRegistrationBot:
             log.info(f"[Phone:{self.device}] Step 5 – Điền form đăng ký tài khoản...")
             name_ok = await self._type_into_labeled_field(
                 row["name"],
-                ["お名前", "氏名", "名前", "Your name", "First name"],
+                ["お名前", "氏名", "名前", "Your name", "First name", "First and last name"],
                 description="Ô Tên (氏名)",
                 fallback_bbox=(40, 60, 30, 34),
             )
@@ -1653,18 +1683,26 @@ class PhoneRegistrationBot:
                 return result
             await self._delay(0.5, 1.0)
 
-            confirm_ok = await self._type_into_labeled_field(
-                row["password"],
-                ["パスワードを再入力", "Confirm password", "パスワード再入力", "Re-enter password"],
-                description="Ô Xác nhận mật khẩu",
-                is_password=True,
-                fallback_bbox=(40, 60, 56, 60),
+            confirm_markers = ["パスワードを再入力", "Confirm password", "パスワード再入力", "Re-enter password"]
+            form_after_password_xml = await self.screen_reader.dump_ui(self.device)
+            has_confirm_password = bool(
+                form_after_password_xml and any(marker.lower() in form_after_password_xml.lower() for marker in confirm_markers)
             )
-            if not confirm_ok:
-                result["note"] = "Không nhập được ô xác nhận mật khẩu"
-                await self._screenshot_step("step5_FAILED_confirm_password_input")
-                return result
-            await self._delay(0.5, 1.0)
+            if has_confirm_password:
+                confirm_ok = await self._type_into_labeled_field(
+                    row["password"],
+                    confirm_markers,
+                    description="Ô Xác nhận mật khẩu",
+                    is_password=True,
+                    fallback_bbox=(40, 60, 56, 60),
+                )
+                if not confirm_ok:
+                    result["note"] = "Không nhập được ô xác nhận mật khẩu"
+                    await self._screenshot_step("step5_FAILED_confirm_password_input")
+                    return result
+                await self._delay(0.5, 1.0)
+            else:
+                log.info(f"[Phone:{self.device}] Step 5 – Flow hiện tại không có ô Confirm password, bỏ qua bước này")
             await self._screenshot_step("step5_form_filled")
 
             # ── STEP 6: Submit form ───────────────────────────────────
@@ -1673,13 +1711,18 @@ class PhoneRegistrationBot:
                 return result
 
             log.info(f"[Phone:{self.device}] Step 6 – Submit form đăng ký...")
-            await self._scroll_down(1)
-            await self._delay(0.5, 1.0)
-
-            # Click Lệch Tâm Ngẫu Nhiên nút Submit đăng ký (40%-60%, 68%-72%)
             # Lưu thời điểm điện thoại bấm nút "Gửi OTP" để lọc email (Layer 2)
             sent_otp_time = time.time()
-            await self._tap_bbox_pct(40, 60, 68, 72, "Nút Submit đăng ký")
+            submit_ok = await self._tap_best_element_with_scroll_search(
+                texts=["メールアドレスを確認", "Verify email", "メールを確認", "Continue"],
+                description="Nút Verify Email (Gửi OTP)",
+                max_scrolls=1,
+                clickable=True,
+                preferred_region=(20, 80, 40, 82),
+            )
+            if not submit_ok:
+                log.warning(f"[Phone:{self.device}] Không tìm thấy nút Verify email theo text, fallback sang bbox submit gần giữa màn")
+                await self._tap_bbox_pct(35, 65, 44, 60, "Fallback Nút Verify Email")
 
             # Đợi màn hình OTP xuất hiện
             otp_xml = await self._wait_for_state(

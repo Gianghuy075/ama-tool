@@ -111,3 +111,51 @@
   - nếu `Invitation anchor` còn sát đáy màn (`bottom_pct >= 82`) thì bot phải scroll tiếp, không được tap
   - nếu anchor đã lên vùng giữa dưới màn (`y_pct ~55-78`) thì mới cho phép tap tương đối ở dưới anchor
   - `first-fold viewport fallback` chỉ còn dùng khi không có anchor hợp lệ
+
+## Update 2026-07-02 Step 4/5/6 - create-account variant
+
+- Runtime mới nhất trên máy Windows Nhật đã xác nhận:
+  - Step 2: pass, click đúng CTA `Request invite`
+  - Step 3: pass, nhập đúng email vào `Enter mobile number or email`
+  - blocker cũ đã chuyển sang biến thể account-creation sau `Continue`
+- Biến thể Amazon thực tế hiện đang gặp:
+  - màn trung gian có text:
+    - `Looks like you're new to Amazon`
+    - `Let's create an account using your email`
+    - nút vàng `Proceed to create an account`
+  - form kế tiếp có:
+    - `First and last name`
+    - `Password`
+    - `Verify email`
+  - không thể tiếp tục dùng assumption cũ:
+    - chỉ tìm `Create account`
+    - chỉ chờ `Your name/First name`
+    - luôn bắt buộc `Confirm password`
+    - scroll xuống bbox cứng để bấm submit
+- Patch mới đã áp vào `RegisterBot_Package/src/phone_bot.py`:
+  - Step 3 wait nhận thêm marker của màn trung gian và form mới
+  - Step 4 ưu tiên click `Proceed to create an account`
+  - Step 4 bỏ qua click trung gian nếu form đã hiện sẵn
+  - Step 5 hỗ trợ label `First and last name`
+  - Step 5 bỏ qua `Confirm password` nếu flow hiện tại không có field đó
+  - Step 6 ưu tiên bấm `Verify email` theo text, chỉ fallback bbox khi bất khả kháng
+
+## Việc user cần làm ở lượt test tiếp theo
+
+1. Trên máy Windows Nhật:
+   - `git pull origin feature/xiaowei-e2e-readiness`
+2. Chạy lại `python main.py` trong `RegisterBot_Package`
+3. Test 1 account thật và chụp lại nếu fail
+4. Khi xem log, tập trung vào 3 điểm:
+   - Step 4 có log `Proceed to create an account` / `Form tạo tài khoản đã hiện ngay sau Continue`
+   - Step 5 có log `First and last name`
+   - Step 6 có log `Nút Verify Email (Gửi OTP)`
+
+## Mục tiêu xác nhận ở lượt test tới
+
+- bot bấm qua được màn `Proceed to create an account`
+- bot điền được:
+  - `First and last name`
+  - `Password`
+- bot bấm được `Verify email`
+- bot vào được màn OTP thật

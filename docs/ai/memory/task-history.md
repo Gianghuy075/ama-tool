@@ -225,6 +225,38 @@
   - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
   - pass
 
+## 2026-07-02 - Amazon mobile-web Step 4/5/6 runtime variant fix
+
+- Latest Japan Windows runtime evidence confirmed:
+  - Step 2 CTA flow is now reaching the real Amazon sign-in screen
+  - Step 3 email input succeeds on the real `Enter mobile number or email` field
+  - the current blocker moved to the post-email account-creation variant
+- Real runtime variant observed after pressing `Continue`:
+  - intermediate screen text:
+    - `Looks like you're new to Amazon`
+    - `Let's create an account using your email`
+    - yellow button `Proceed to create an account`
+  - create-account form text:
+    - `First and last name`
+    - `Password`
+    - `Verify email`
+  - this variant does not reliably expose the old `Create account` / `Your name` / `Confirm password` markers assumed in code
+- Fix implemented in `RegisterBot_Package/src/phone_bot.py`:
+  - Step 3 post-continue wait now also recognizes:
+    - `Proceed to create an account`
+    - `Let's create an account using your email`
+    - `Looks like you're new to Amazon`
+    - `First and last name`
+    - `Verify email`
+  - Step 4 create-account click now targets the real CTA text `Proceed to create an account`
+  - Step 4 skips the intermediate click entirely if the register form is already visible
+  - Step 5 name-field detection now supports `First and last name`
+  - Step 5 confirm-password entry is now optional and skipped when that field is absent in the current Amazon variant
+  - Step 6 no longer scrolls blindly to a fixed bbox; it now tries to tap the visible `Verify email` button by text first, then falls back to a constrained bbox only if needed
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
+  - pass
+
 ## 2026-07-01 - False-positive guard for Step 3 email typing
 
 - Another runtime regression appeared after the CTA/state patches:
