@@ -8,6 +8,7 @@ import email
 import re
 import time
 import logging
+import html
 from email.header import decode_header
 from email import utils as email_utils
 from typing import Optional
@@ -25,6 +26,43 @@ class GmailOTPReader:
         mail = imaplib.IMAP4_SSL(self.imap_server, 993)
         mail.login(self.email_addr, self.password)
         return mail
+
+    def _decode_mime_header(self, value: str) -> str:
+        """Decode MIME-encoded header into plain unicode text."""
+        if not value:
+            return ""
+
+        parts = []
+        for chunk, encoding in decode_header(value):
+            try:
+                if isinstance(chunk, bytes):
+                    parts.append(chunk.decode(encoding or "utf-8", errors="replace"))
+                else:
+                    parts.append(str(chunk))
+            except Exception:
+                parts.append(str(chunk))
+        return " ".join(part.strip() for part in parts if part and str(part).strip())
+
+    def _contains_email_hint(self, haystack: str, target_email: str) -> bool:
+        """Loose email match for forwarded mail variants."""
+        if not haystack or not target_email:
+            return False
+
+        haystack_l = haystack.lower()
+        target_l = target_email.lower().strip()
+        if target_l in haystack_l:
+            return True
+
+        local_part = target_l.split("@", 1)[0]
+        return len(local_part) >= 4 and local_part in haystack_l
+
+    def _extract_candidate_otp(self, subject: str, body: str) -> Optional[str]:
+        """
+        Extract OTP from subject/body combined.
+        Subject is included because some Amazon mails expose code there.
+        """
+        combined = "\n".join([subject or "", body or ""])
+        return self._extract_6digit_otp(combined)
 
     def fetch_otp(
         self,
@@ -61,27 +99,42 @@ class GmailOTPReader:
         return None
 
     def _search_otp(self, recipient_email: str, sent_otp_time: float) -> Optional[str]:
-        """Connect to IMAP and search recent emails for forwarded OTP using 3-layer filter."""
+        """
+        Connect to IMAP and search recent emails for Amazon OTP.
+
+        Strategy:
+        - chỉ lấy email từ hệ Amazon
+        - ưu tiên email gần `sent_otp_time`
+        - ưu tiên email có recipient hint trùng account đang đăng ký
+        - vẫn cho phép forward/runtime variant khi recipient hint không xuất hiện rõ
+        """
         try:
             mail = self._connect()
-            
-            # Lớp 1: Truy cập thẳng vào thư mục [Gmail]/All Mail để quét
+
+            # Ưu tiên quét All Mail/INBOX; thêm Spam để không miss mail bị lọc.
             selected = False
-            for folder in ['"[Gmail]/All Mail"', '[Gmail]/All Mail', '"[Gmail]/Tất cả Thư"', '[Gmail]/Tất cả Thư', 'INBOX']:
+            selected_folder = "INBOX"
+            for folder in [
+                '"[Gmail]/All Mail"', '[Gmail]/All Mail',
+                '"[Gmail]/Tất cả Thư"', '[Gmail]/Tất cả Thư',
+                '"[Gmail]/Spam"', '[Gmail]/Spam',
+                'INBOX',
+            ]:
                 try:
                     status, _ = mail.select(folder)
                     if status == 'OK':
                         selected = True
+                        selected_folder = folder
                         log.debug(f"Selected folder: {folder}")
                         break
                 except Exception:
                     continue
-            
+
             if not selected:
                 mail.select("INBOX")
+                selected_folder = "INBOX"
                 log.debug("Selected fallback folder: INBOX")
 
-            # Quét tất cả email gần đây (lấy 30 thư mới nhất)
             status, msg_ids = mail.search(None, "ALL")
             ids = msg_ids[0].split()
 
@@ -89,8 +142,11 @@ class GmailOTPReader:
                 mail.logout()
                 return None
 
-            # Duyệt từ mới nhất về cũ nhất
-            for msg_id in reversed(ids[-30:]):
+            candidates = []
+            rejected = []
+
+            # Duyệt 50 thư mới nhất từ mới -> cũ
+            for msg_id in reversed(ids[-50:]):
                 try:
                     _, data = mail.fetch(msg_id, "(RFC822)")
                     if not data or not data[0]:
@@ -98,9 +154,11 @@ class GmailOTPReader:
                     raw = data[0][1]
                     msg = email.message_from_bytes(raw)
 
-                    # Lớp 2 (Lọc Người gửi & Thời gian)
-                    from_field = msg.get("From", "")
-                    if not from_field or not any(x in from_field.lower() for x in ["amazon.com", "amazon.co.jp", "amazon"]):
+                    from_field = self._decode_mime_header(msg.get("From", ""))
+                    subject = self._decode_mime_header(msg.get("Subject", ""))
+                    from_lower = from_field.lower()
+
+                    if not from_field or not any(x in from_lower for x in ["amazon.com", "amazon.co.jp", "amazon"]):
                         continue
 
                     date_str = msg.get("Date")
@@ -113,52 +171,93 @@ class GmailOTPReader:
                     else:
                         mail_ts = time.time()
 
-                    # Cho phép lệch clock tối đa 60 giây trước thời điểm gửi
-                    if mail_ts < (sent_otp_time - 60):
+                    # Cho phép lệch clock trước thời điểm gửi tối đa 2 phút.
+                    if mail_ts < (sent_otp_time - 120):
+                        rejected.append(f"msg={msg_id.decode()} old mail ts={int(mail_ts)} subj='{subject[:40]}'")
                         continue
 
-                    # Lớp 3 (Quét trường ẩn để bắt khớp)
-                    sub_email = recipient_email.lower().strip()
-                    found_recipient = False
+                    body = self._extract_body(msg)
+                    otp = self._extract_candidate_otp(subject, body)
+                    if not otp:
+                        rejected.append(f"msg={msg_id.decode()} no otp subj='{subject[:40]}'")
+                        continue
 
-                    # Kiểm tra các headers phổ biến cho email chuyển tiếp hoặc trực tiếp
+                    sub_email = recipient_email.lower().strip()
+                    recipient_hint = False
                     for header_name in ["X-Forwarded-To", "Delivered-To", "To", "Cc", "X-Original-To"]:
-                        header_val = msg.get(header_name, "")
-                        if header_val and sub_email in header_val.lower():
-                            found_recipient = True
+                        header_val = self._decode_mime_header(msg.get(header_name, ""))
+                        if self._contains_email_hint(header_val, sub_email):
+                            recipient_hint = True
                             break
 
-                    # Kiểm tra toàn bộ headers khác nếu chưa thấy
-                    if not found_recipient:
+                    if not recipient_hint:
                         for name, value in msg.items():
-                            if sub_email in str(value).lower():
-                                found_recipient = True
+                            decoded_val = self._decode_mime_header(str(value))
+                            if self._contains_email_hint(decoded_val, sub_email):
+                                recipient_hint = True
                                 break
 
-                    # Trích xuất body
-                    body = self._extract_body(msg)
+                    if not recipient_hint and self._contains_email_hint(body, sub_email):
+                        recipient_hint = True
 
-                    # Kiểm tra body nếu chưa thấy khớp ở headers
-                    if not found_recipient:
-                        if sub_email in body.lower():
-                            found_recipient = True
+                    signal_score = 0
+                    combined_lower = f"{subject}\n{body}".lower()
+                    otp_markers = [
+                        "one time password",
+                        "verification code",
+                        "verify email address",
+                        "confirm your email",
+                        "amazon registration",
+                        "認証コード",
+                        "確認コード",
+                        "verify your email",
+                    ]
+                    for marker in otp_markers:
+                        if marker in combined_lower:
+                            signal_score += 15
 
-                    if not found_recipient:
-                        continue
-
-                    # Bốc tách 6 số OTP bằng RegEx
-                    otp = self._extract_6digit_otp(body)
-                    if otp:
-                        # Đánh dấu đã đọc thư này
-                        mail.store(msg_id, "+FLAGS", "\\Seen")
-                        mail.logout()
-                        log.info(f"Found forwarded OTP {otp} in email to {recipient_email}")
-                        return otp
+                    freshness_bonus = max(0, 60 - int(max(0, time.time() - mail_ts) / 10))
+                    total_score = signal_score + freshness_bonus + (60 if recipient_hint else 0)
+                    candidate = {
+                        "msg_id_raw": msg_id,
+                        "msg_id": msg_id.decode(),
+                        "otp": otp,
+                        "subject": subject,
+                        "from": from_field,
+                        "ts": mail_ts,
+                        "recipient_hint": recipient_hint,
+                        "score": total_score,
+                    }
+                    candidates.append(candidate)
                 except Exception as ex:
                     log.warning(f"Error processing message ID {msg_id}: {ex}")
                     continue
 
+            if not candidates:
+                preview = " | ".join(rejected[:5]) if rejected else "no recent amazon candidates"
+                log.info(
+                    f"OTP search found no usable candidate for {recipient_email} in {selected_folder}. "
+                    f"Rejected preview: {preview}"
+                )
+                mail.logout()
+                return None
+
+            candidates.sort(key=lambda item: (item["recipient_hint"], item["score"], item["ts"]), reverse=True)
+            top_preview = " | ".join(
+                f"msg={item['msg_id']} score={item['score']} recipient_hint={item['recipient_hint']} "
+                f"subj='{item['subject'][:40]}'"
+                for item in candidates[:3]
+            )
+            log.info(f"OTP candidates for {recipient_email}: {top_preview}")
+
+            best = candidates[0]
+            mail.store(best["msg_id_raw"], "+FLAGS", "\\Seen")
             mail.logout()
+            log.info(
+                f"Found OTP {best['otp']} for {recipient_email} from '{best['from']}' "
+                f"(recipient_hint={best['recipient_hint']}, score={best['score']})"
+            )
+            return best["otp"]
         except Exception as e:
             log.error(f"IMAP search error: {e}")
         return None
@@ -187,7 +286,7 @@ class GmailOTPReader:
                         if payload:
                             charset = part.get_content_charset() or "utf-8"
                             html_content = payload.decode(charset, errors="replace")
-                            body += re.sub(r'<[^>]+>', ' ', html_content)
+                            body += re.sub(r'<[^>]+>', ' ', html.unescape(html_content))
         else:
             payload = msg.get_payload(decode=True)
             if payload:
@@ -195,7 +294,7 @@ class GmailOTPReader:
                 ctype = msg.get_content_type()
                 text_content = payload.decode(charset, errors="replace")
                 if ctype == "text/html":
-                    body = re.sub(r'<[^>]+>', ' ', text_content)
+                    body = re.sub(r'<[^>]+>', ' ', html.unescape(text_content))
                 else:
                     body = text_content
         return body

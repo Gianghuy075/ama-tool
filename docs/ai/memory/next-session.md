@@ -191,3 +191,36 @@
    - nếu fallback chạy, log sẽ có:
      - `Không tìm thấy field đủ tin cậy ... fallback sang bbox cũ`
    - nếu vẫn sai, gửi lại ảnh + đoạn log từ `Step 5 – Điền form đăng ký` đến lúc gõ password
+
+## Update 2026-07-02 OTP blocker moved to Gmail reader
+
+- Runtime tốt nhất hiện tại đã đi qua được:
+  - Step 2 `Request invite`
+  - Step 3 email sign-in
+  - Step 4 create-account variant
+  - Step 5 name + password
+  - Step 6 `Verify email`
+- Blocker hiện tại:
+  - Step 7 timeout khi lấy OTP Gmail
+  - nguyên nhân nghi ngờ mạnh nhất là `gmail_otp.py` lọc quá cứng theo `recipient_email`, nên mail Amazon dạng forward/runtime variant bị bỏ qua
+- Đã sửa trong repo:
+  - decode MIME `Subject`/`From`
+  - tìm OTP trong cả `subject + body`
+  - recipient match chỉ còn là `boost`, không còn là điều kiện bắt buộc
+  - thêm log:
+    - `OTP search found no usable candidate ... Rejected preview: ...`
+    - `OTP candidates for ...`
+    - `Found OTP ... recipient_hint=... score=...`
+
+## Việc user cần làm ở lượt test kế tiếp
+
+1. Trên máy Windows Nhật:
+   - `git pull origin feature/xiaowei-e2e-readiness`
+2. Chạy lại `python main.py`
+3. Test 1 account thật tới màn OTP
+4. Nếu vẫn fail ở OTP:
+   - gửi lại đoạn log từ `Step 7 – Chờ và nhập mã OTP...` tới `OTP timeout`
+   - đặc biệt giữ lại các dòng mới:
+     - `OTP search found no usable candidate`
+     - `Rejected preview`
+     - `OTP candidates for`

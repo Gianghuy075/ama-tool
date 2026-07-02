@@ -225,6 +225,33 @@
   - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
   - pass
 
+## 2026-07-02 - Gmail OTP reader relaxed for forwarded/runtime variants
+
+- Latest runtime on the Japan Windows machine confirmed:
+  - Step 2 CTA pass
+  - Step 3 email pass
+  - Step 4 create-account transition pass
+  - Step 5 name/password fill pass
+  - Step 6 `Verify email` pass
+  - current blocker moved to Step 7 Gmail OTP polling timeout
+- Root issue in `RegisterBot_Package/src/gmail_otp.py`:
+  - old logic rejected any Amazon email that did not explicitly contain the target `recipient_email`
+  - that is too strict for forwarded mail or vendor email-format variants
+  - logs also did not expose *why* messages were skipped
+- Fix implemented:
+  - decode MIME `From`/`Subject` headers correctly
+  - extract OTP from both subject and body
+  - replace hard reject on recipient mismatch with scoring:
+    - Amazon sender required
+    - recent timestamp required
+    - OTP markers boost confidence
+    - recipient hint only boosts, no longer blocks
+  - add rejection preview logs and top OTP candidate logs per poll
+  - unescape HTML body before OTP extraction
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/gmail_otp.py`
+  - pass
+
 ## 2026-07-02 - Amazon mobile-web Step 4/5/6 runtime variant fix
 
 - Latest Japan Windows runtime evidence confirmed:

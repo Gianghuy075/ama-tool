@@ -82,7 +82,10 @@ Mục tiêu vận hành:
 - cập nhật runtime mới nhất:
   - Step 2 `Request invite` trên Chrome mobile web đã đi đúng sang sign-in flow
   - Step 3 nhập email đã pass trên runtime thật
-  - blocker hiện tại đã dồn sang biến thể `Proceed to create an account` -> form `First and last name` -> `Verify email`
+  - Step 4 `Proceed to create an account` đã pass
+  - Step 5 `First and last name` + `Password` đã pass
+  - Step 6 `Verify email` đã pass
+  - blocker hiện tại đã chuyển sang `Step 7 - Gmail OTP retrieval`
 
 ## Cách chia track để không lẫn
 
