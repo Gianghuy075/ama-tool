@@ -89,3 +89,14 @@
   - log có `CTA micro-scroll step=1`
   - sau đó nếu geometry vẫn rác thì log có `first-fold viewport`
   - bot có vào đúng sign-in flow hay không
+
+## Update 2026-07-02 Step 2 CTA - scroll verify
+
+- Đã xác định lỗi mới:
+  - bot có gửi `swipe` nhưng runtime thực tế không tạo thay đổi viewport đủ rõ
+  - code cũ vẫn coi như scroll thành công rồi tiếp tục tap CTA
+- Đã sửa tiếp:
+  - `CTA micro-scroll` giờ dùng nấc mạnh hơn để lộ CTA web Chrome
+  - sau mỗi swipe phải có `wait_for_ui_change`
+  - chỉ khi viewport đổi thật mới cho phép dùng `first-fold viewport fallback`
+  - nếu swipe không làm UI đổi, bot sẽ log rõ và thử nấc scroll mạnh hơn

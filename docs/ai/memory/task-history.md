@@ -287,6 +287,7 @@ Ghi lại lịch sử task/session quan trọng đã thực hiện bởi user ho
 | 2026-06-30 | Chuẩn bị migration sang `RegisterBot -> XiaoWei API`, thêm runbook/config mẫu/diagnostics tích hợp | Codex | `RegisterBot_Package/src/xiaowei_client.py`, `src/web_server.py`, `src/web/*`, `main.py`, `docs/ai/plans/*` | In progress, ready for Windows runtime test | `docs/ai/plans/xiaowei-direct-integration-plan.md`, `docs/ai/plans/xiaowei-windows-jp-runbook.md` |
 | 2026-06-30 | Truy xuất contract API XiaoWei official từ site API nội bộ | Codex | `docs/ai/plans/xiaowei-api-contract-notes.md`, `docs/ai/plans/xiaowei-direct-integration-plan.md` | Partial contract confirmed | `https://www.xiaowei.xin/api/manual/article?id=234` |
 | 2026-07-02 | Sửa lại Step 2 CTA cho XiaoWei sau regression geometry/XML: bỏ click mù theo anchor/bbox thấp, chuyển sang micro-scroll nhẹ + first-fold viewport tap hẹp | Codex | `RegisterBot_Package/src/phone_bot.py`, `docs/ai/memory/next-session.md` | Completed in code, pending Windows JP runtime verification | `python3 -m py_compile RegisterBot_Package/src/phone_bot.py` |
+| 2026-07-02 | Sửa tiếp Step 2 CTA: scroll phải được xác nhận bằng `wait_for_ui_change`, nếu viewport không đổi thì không được coi như scroll thành công | Codex | `RegisterBot_Package/src/phone_bot.py`, `docs/ai/memory/next-session.md` | Completed in code, pending Windows JP runtime verification | `python3 -m py_compile RegisterBot_Package/src/phone_bot.py` |
 
 ## Ghi chú
 

@@ -793,24 +793,44 @@ class PhoneRegistrationBot:
             and node.get("cy", 0) > 0
         )
 
-    async def _scroll_cta_micro_down(self, attempt: int = 0) -> bool:
+    async def _scroll_cta_micro_down(self, attempt: int = 0, prev_xml: Optional[str] = None) -> Optional[str]:
         """
         Micro-scroll riêng cho CTA ở product first-fold.
         Mục tiêu là không vượt quá nút vàng ngay dưới ảnh.
         """
         swipe_plan = [
-            (0.50, 0.79, 0.50, 0.71, 240),
-            (0.50, 0.78, 0.50, 0.68, 260),
-            (0.50, 0.76, 0.50, 0.64, 280),
+            (0.50, 0.82, 0.50, 0.64, 300),
+            (0.50, 0.81, 0.50, 0.62, 320),
+            (0.50, 0.80, 0.50, 0.60, 340),
         ]
-        x1, y1, x2, y2, duration = swipe_plan[min(attempt, len(swipe_plan) - 1)]
-        log.info(
-            f"[Phone:{self.device}] CTA micro-scroll step={attempt + 1}: "
-            f"({x1:.2f},{y1:.2f}) -> ({x2:.2f},{y2:.2f}) duration={duration}ms"
-        )
-        ok = await self.xw.swipe_custom(self.device, x1, y1, x2, y2, duration=duration)
-        await self._delay(0.4, 0.8)
-        return ok
+        baseline_xml = prev_xml or await self.screen_reader.dump_ui(self.device)
+        start_idx = min(attempt, len(swipe_plan) - 1)
+
+        for idx in range(start_idx, len(swipe_plan)):
+            x1, y1, x2, y2, duration = swipe_plan[idx]
+            log.info(
+                f"[Phone:{self.device}] CTA micro-scroll step={idx + 1}: "
+                f"({x1:.2f},{y1:.2f}) -> ({x2:.2f},{y2:.2f}) duration={duration}ms"
+            )
+            ok = await self.xw.swipe_custom(self.device, x1, y1, x2, y2, duration=duration)
+            if not ok:
+                log.warning(f"[Phone:{self.device}] CTA micro-scroll step={idx + 1} gửi lệnh swipe thất bại")
+                continue
+            changed_xml = await self.screen_reader.wait_for_ui_change(
+                self.device,
+                baseline_xml,
+                timeout=2.2,
+                poll_interval=0.35,
+            )
+            if changed_xml:
+                log.info(f"[Phone:{self.device}] CTA micro-scroll step={idx + 1} đã làm viewport thay đổi thật")
+                return changed_xml
+            log.warning(
+                f"[Phone:{self.device}] CTA micro-scroll step={idx + 1} không làm viewport đổi rõ rệt; "
+                "thử nấc scroll mạnh hơn"
+            )
+
+        return None
 
     def _has_request_invitation_text_without_geometry(self, xml: str) -> bool:
         """
@@ -851,8 +871,11 @@ class PhoneRegistrationBot:
         Ưu tiên tận dụng đúng viewport XML vừa verify được ở product page.
         Nếu tại chính viewport đó đã thấy text CTA thì không được cuộn mù ngay.
         """
+        prefetched_xml = initial_xml
+        confirmed_scroll = False
         for attempt in range(4):
-            xml = initial_xml if attempt == 0 and initial_xml else await self.screen_reader.dump_ui(self.device)
+            xml = prefetched_xml if prefetched_xml else await self.screen_reader.dump_ui(self.device)
+            prefetched_xml = None
             if not xml:
                 continue
 
@@ -897,7 +920,10 @@ class PhoneRegistrationBot:
                     f"[Phone:{self.device}] CTA text đã xuất hiện nhưng geometry không dùng được; "
                     "bắt buộc micro-scroll 1 nhịp để lộ nút thật, không click mù ở first fold"
                 )
-                await self._scroll_cta_micro_down(0)
+                changed_xml = await self._scroll_cta_micro_down(0, xml)
+                if changed_xml:
+                    prefetched_xml = changed_xml
+                    confirmed_scroll = True
                 continue
 
             anchor = self._find_invitation_anchor(xml or "")
@@ -918,7 +944,7 @@ class PhoneRegistrationBot:
                     "nhưng chưa có bounds CTA đủ tin cậy; bỏ anchor fallback để tránh click nhầm"
                 )
 
-            if attempt >= 1 and self._has_request_invitation_text_without_geometry(xml):
+            if attempt >= 1 and confirmed_scroll and self._has_request_invitation_text_without_geometry(xml):
                 await self._tap_first_fold_cta_viewport(attempt - 1)
                 return True, "first_fold_viewport_fallback"
 
@@ -927,7 +953,10 @@ class PhoneRegistrationBot:
                     f"[Phone:{self.device}] Chưa tìm được CTA vàng hợp lệ, micro-scroll thêm 1 nhịp "
                     f"(attempt {attempt + 1}/3)"
                 )
-                await self._scroll_cta_micro_down(attempt)
+                changed_xml = await self._scroll_cta_micro_down(attempt, xml)
+                if changed_xml:
+                    prefetched_xml = changed_xml
+                    confirmed_scroll = True
 
         log.error(f"[Phone:{self.device}] Không tìm được CTA vàng '招待をリクエストする' hợp lệ")
         return False, "not_found"
