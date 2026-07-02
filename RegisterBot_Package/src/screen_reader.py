@@ -227,6 +227,9 @@ class ScreenReader:
         xml_str: str,
         label_texts: list[str],
         max_distance: float = 500.0,
+        preferred_region: tuple[float, float, float, float] = None,
+        min_score: float = 0.0,
+        prefer_password: bool = False,
     ) -> Optional[dict]:
         """
         Tìm EditText tốt nhất gần label. Dùng cho email/name/password fields.
@@ -257,6 +260,10 @@ class ScreenReader:
             dy = node["cy"] - label["cy"]
             dx = abs(node["cx"] - label["cx"])
             distance = math.hypot(dx, max(0, dy))
+            screen_w = max(node_["x2"] for node_ in nodes)
+            screen_h = max(node_["y2"] for node_ in nodes)
+            x_pct = (node["cx"] / max(1, screen_w)) * 100.0
+            y_pct = (node["cy"] / max(1, screen_h)) * 100.0
 
             score = 0.0
             if dy >= -30:
@@ -270,12 +277,33 @@ class ScreenReader:
                 score += 8.0
             if dx < 150:
                 score += 8.0
+            if preferred_region:
+                x1_pct, x2_pct, y1_pct, y2_pct = preferred_region
+                if x1_pct <= x_pct <= x2_pct and y1_pct <= y_pct <= y2_pct:
+                    score += 25.0
+                else:
+                    score -= 35.0
+            if prefer_password:
+                if node["password"]:
+                    score += 35.0
+                else:
+                    score -= 15.0
+                if y_pct < 20.0:
+                    score -= 40.0
 
             if score > best_score:
                 best_score = score
-                best = {**node, "score": round(score, 2), "anchor_text": label["text"] or label["content_desc"]}
+                best = {
+                    **node,
+                    "score": round(score, 2),
+                    "anchor_text": label["text"] or label["content_desc"],
+                    "x_pct": round(x_pct, 2),
+                    "y_pct": round(y_pct, 2),
+                }
 
-        return best
+        if best and best["score"] >= min_score:
+            return best
+        return None
 
     def find_element_by_text(self, xml_str: str, text: str, partial: bool = True) -> Optional[dict]:
         """

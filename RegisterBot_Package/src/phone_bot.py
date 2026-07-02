@@ -1238,16 +1238,25 @@ class PhoneRegistrationBot:
         description: str = "",
         is_password: bool = False,
         fallback_bbox: tuple[float, float, float, float] = None,
+        preferred_region: tuple[float, float, float, float] = None,
+        min_field_score: float = 0.0,
     ) -> bool:
         """
         Tìm ô input gần label trong UI XML, focus và nhập text. Có fallback bbox nếu cần.
         """
         xml = await self.screen_reader.dump_ui(self.device)
-        field = self.screen_reader.find_input_near_label(xml or "", label_texts) if xml else None
+        field = self.screen_reader.find_input_near_label(
+            xml or "",
+            label_texts,
+            preferred_region=preferred_region,
+            min_score=min_field_score,
+            prefer_password=is_password,
+        ) if xml else None
         if field:
             log.info(
                 f"[Phone:{self.device}] Tìm thấy field '{description or label_texts[0]}' gần label "
-                f"'{field.get('anchor_text', '')}' tại ({field['cx']},{field['cy']}) score={field.get('score')}"
+                f"'{field.get('anchor_text', '')}' tại ({field['cx']},{field['cy']}) "
+                f"score={field.get('score')} x_pct={field.get('x_pct')} y_pct={field.get('y_pct')}"
             )
             x_pct, y_pct = await self._device_point_to_percent(field["cx"], field["cy"])
             return await self._type_and_verify(
@@ -1260,7 +1269,7 @@ class PhoneRegistrationBot:
 
         if fallback_bbox:
             log.warning(
-                f"[Phone:{self.device}] Không tìm thấy field theo label '{description or label_texts[0]}', "
+                f"[Phone:{self.device}] Không tìm thấy field đủ tin cậy theo label '{description or label_texts[0]}', "
                 "fallback sang bbox cũ"
             )
             return await self._type_and_verify(
@@ -1564,6 +1573,8 @@ class PhoneRegistrationBot:
                 ],
                 description="Ô Email",
                 fallback_bbox=None,
+                preferred_region=(20, 80, 20, 45),
+                min_field_score=45.0,
             )
             if not email_ok:
                 result["note"] = "Không nhập được email vào form đăng nhập"
@@ -1663,6 +1674,8 @@ class PhoneRegistrationBot:
                 ["お名前", "氏名", "名前", "Your name", "First name", "First and last name"],
                 description="Ô Tên (氏名)",
                 fallback_bbox=(40, 60, 30, 34),
+                preferred_region=(20, 80, 35, 55),
+                min_field_score=45.0,
             )
             if not name_ok:
                 result["note"] = "Không nhập được tên vào form đăng ký"
@@ -1675,7 +1688,9 @@ class PhoneRegistrationBot:
                 ["パスワード", "Password"],
                 description="Ô Mật khẩu",
                 is_password=True,
-                fallback_bbox=(40, 60, 46, 50),
+                fallback_bbox=(38, 62, 44, 56),
+                preferred_region=(20, 80, 40, 62),
+                min_field_score=45.0,
             )
             if not password_ok:
                 result["note"] = "Không nhập được mật khẩu"
@@ -1695,6 +1710,8 @@ class PhoneRegistrationBot:
                     description="Ô Xác nhận mật khẩu",
                     is_password=True,
                     fallback_bbox=(40, 60, 56, 60),
+                    preferred_region=(20, 80, 52, 68),
+                    min_field_score=45.0,
                 )
                 if not confirm_ok:
                     result["note"] = "Không nhập được ô xác nhận mật khẩu"
@@ -1781,6 +1798,8 @@ class PhoneRegistrationBot:
                 description="Ô OTP",
                 is_password=False,
                 fallback_bbox=(30, 70, 40, 44),
+                preferred_region=(20, 80, 30, 60),
+                min_field_score=35.0,
             )
             if not otp_ok:
                 result["note"] = "Không nhập được OTP vào form xác minh"

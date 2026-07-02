@@ -159,3 +159,35 @@
   - `Password`
 - bot bấm được `Verify email`
 - bot vào được màn OTP thật
+
+## Update 2026-07-02 Password field false-positive
+
+- Runtime mới nhất xác nhận:
+  - Step 2 pass
+  - Step 3 pass
+  - Step 4 pass
+  - Step 5 phần `First and last name` pass
+  - blocker mới là `Password field`
+- Failure thực tế:
+  - bot log tìm thấy `Ô Mật khẩu` gần label `Show password`
+  - candidate có score rất thấp nhưng vẫn bị dùng
+  - click rơi vào top bar của Chrome (`omnibox/search/url bar`)
+  - sau đó password bị gõ nhầm vào Chrome UI thay vì web form
+- Patch mới đã áp:
+  - thêm `min_score` cho field detection
+  - thêm `preferred_region` cho email/name/password/otp
+  - password flow ưu tiên node `password=true`
+  - password flow phạt nặng candidate ở top màn hình
+  - nếu candidate không đủ tin cậy thì bỏ qua và fallback vào bbox của form
+
+## Việc user cần làm ở lượt test kế tiếp
+
+1. Trên máy Windows Nhật:
+   - `git pull origin feature/xiaowei-e2e-readiness`
+2. Chạy lại `python main.py` trong `RegisterBot_Package`
+3. Test lại 1 account thật
+4. Khi xem log, tập trung đặc biệt vào password step:
+   - nếu đúng, log phải không còn tọa độ kiểu `y~176`
+   - nếu fallback chạy, log sẽ có:
+     - `Không tìm thấy field đủ tin cậy ... fallback sang bbox cũ`
+   - nếu vẫn sai, gửi lại ảnh + đoạn log từ `Step 5 – Điền form đăng ký` đến lúc gõ password

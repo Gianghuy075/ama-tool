@@ -257,6 +257,39 @@
   - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py`
   - pass
 
+## 2026-07-02 - Password field false-positive to Chrome omnibox
+
+- New runtime evidence on the Japan Windows machine showed:
+  - Step 2 pass
+  - Step 3 pass
+  - Step 4 pass
+  - Step 5 `First and last name` pass
+  - the new blocker is password-field targeting
+- Real failure observed:
+  - bot identified password field with a very weak score:
+    - `anchor_text='Show password'`
+    - candidate `(483,176)`
+    - score around `1.84`
+  - this coordinate is in Chrome top-bar/omnibox region, not in the web form
+  - bot then focused Chrome search/url bar and typed password into browser UI
+- Root cause in code before fix:
+  - `ScreenReader.find_input_near_label()` returned the best candidate even when score was extremely weak
+  - `_type_into_labeled_field()` accepted any non-None candidate and never forced fallback bbox
+  - password flow skipped content verification, so the wrong focus was not blocked
+- Fix implemented:
+  - `RegisterBot_Package/src/screen_reader.py`
+    - added `preferred_region`
+    - added `min_score`
+    - added `prefer_password`
+    - password search now boosts `password=true` nodes and penalizes top-screen candidates
+  - `RegisterBot_Package/src/phone_bot.py`
+    - `_type_into_labeled_field()` now passes scoring/region constraints through
+    - email/name/password/confirm/otp fields now have explicit region constraints
+    - password field now requires a stronger score and falls back to a constrained bbox if no trustworthy candidate exists
+- Verification:
+  - `python3 -m py_compile RegisterBot_Package/src/phone_bot.py RegisterBot_Package/src/screen_reader.py`
+  - pass
+
 ## 2026-07-01 - False-positive guard for Step 3 email typing
 
 - Another runtime regression appeared after the CTA/state patches:
