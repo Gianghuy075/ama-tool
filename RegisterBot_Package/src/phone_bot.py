@@ -928,6 +928,19 @@ class PhoneRegistrationBot:
 
             anchor = self._find_invitation_anchor(xml or "")
             if anchor:
+                anchor_bottom_pct = anchor.get("bottom_pct", 100.0)
+                anchor_y_pct = anchor.get("y_pct", 100.0)
+                if anchor_bottom_pct >= 82.0 and attempt < 3:
+                    log.info(
+                        f"[Phone:{self.device}] Invitation anchor đã hiện nhưng còn sát đáy màn "
+                        f"(bottom_pct={anchor_bottom_pct:.2f}); CTA nhiều khả năng còn dưới fold, scroll thêm trước khi tap"
+                    )
+                    changed_xml = await self._scroll_cta_micro_down(min(attempt + 1, 2), xml)
+                    if changed_xml:
+                        prefetched_xml = changed_xml
+                        confirmed_scroll = True
+                        continue
+
                 anchor_button = self._find_cta_below_anchor(xml or "", anchor)
                 if anchor_button:
                     log.info(
@@ -941,10 +954,13 @@ class PhoneRegistrationBot:
 
                 log.warning(
                     f"[Phone:{self.device}] Đã thấy invitation anchor '{anchor.get('visible_text', '')[:40]}' "
-                    "nhưng chưa có bounds CTA đủ tin cậy; bỏ anchor fallback để tránh click nhầm"
+                    "nhưng chưa có bounds CTA đủ tin cậy"
                 )
+                if 55.0 <= anchor_y_pct <= 78.0:
+                    await self._tap_request_invitation_from_anchor(anchor)
+                    return True, "anchor_relative_fallback"
 
-            if attempt >= 1 and confirmed_scroll and self._has_request_invitation_text_without_geometry(xml):
+            if attempt >= 1 and confirmed_scroll and not anchor and self._has_request_invitation_text_without_geometry(xml):
                 await self._tap_first_fold_cta_viewport(attempt - 1)
                 return True, "first_fold_viewport_fallback"
 
@@ -965,16 +981,15 @@ class PhoneRegistrationBot:
         """
         Fallback có kiểm soát: tap vào vùng nút vàng nằm bên dưới invitation anchor.
         """
-        screen_w, screen_h = await self.get_device_resolution()
-        x_pct = 50.0
-        # Nút vàng thường nằm ngay dưới đoạn mô tả invitation, dùng offset vừa phải theo anchor.
-        target_y_px = min(screen_h - 80, anchor["y2"] + int(screen_h * 0.12))
+        _, screen_h = await self.get_device_resolution()
+        # Với layout Amazon mobile hiện tại, tâm CTA thường nằm thấp hơn anchor khoảng 7-9% chiều cao màn.
+        target_y_px = min(screen_h - 90, anchor["y2"] + int(screen_h * 0.08))
         y_pct = (target_y_px / max(1, screen_h)) * 100.0
         log.info(
             f"[Phone:{self.device}] Fallback anchor-based CTA tap dưới anchor tại y_pct={y_pct:.2f} "
-            f"(anchor_y2={anchor['y2']})"
+            f"(anchor_y2={anchor['y2']}, anchor_bottom_pct={anchor.get('bottom_pct', -1):.2f})"
         )
-        await self._tap_bbox_pct(22, 78, max(0.0, y_pct - 3.5), min(100.0, y_pct + 3.5), "Fallback CTA theo anchor")
+        await self._tap_bbox_pct(20, 80, max(0.0, y_pct - 2.8), min(100.0, y_pct + 2.8), "Fallback CTA theo anchor")
 
     def _find_invitation_anchor(self, xml: str) -> Optional[dict]:
         """
@@ -1005,6 +1020,7 @@ class PhoneRegistrationBot:
                 continue
 
             y_pct = (node["cy"] / max(1, screen_h)) * 100.0
+            bottom_pct = (node["y2"] / max(1, screen_h)) * 100.0
             score = 100.0
             if 35.0 <= y_pct <= 70.0:
                 score += 25.0
@@ -1014,6 +1030,8 @@ class PhoneRegistrationBot:
                 **node,
                 "visible_text": visible_text,
                 "score": score,
+                "y_pct": round(y_pct, 2),
+                "bottom_pct": round(bottom_pct, 2),
             })
 
         if not anchors:
@@ -1022,7 +1040,8 @@ class PhoneRegistrationBot:
         best = anchors[0]
         log.info(
             f"[Phone:{self.device}] Invitation anchor: ({best['cx']},{best['cy']}) "
-            f"score={best['score']} text='{best['visible_text'][:40]}'"
+            f"score={best['score']} y_pct={best.get('y_pct')} bottom_pct={best.get('bottom_pct')} "
+            f"text='{best['visible_text'][:40]}'"
         )
         return best
 

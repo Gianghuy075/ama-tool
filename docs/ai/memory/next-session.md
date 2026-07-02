@@ -100,3 +100,14 @@
   - sau mỗi swipe phải có `wait_for_ui_change`
   - chỉ khi viewport đổi thật mới cho phép dùng `first-fold viewport fallback`
   - nếu swipe không làm UI đổi, bot sẽ log rõ và thử nấc scroll mạnh hơn
+
+## Update 2026-07-02 Step 2 CTA - anchor guided
+
+- Từ ảnh runtime web Chrome:
+  - sau scroll đầu tiên, `Available by invitation` đã hiện nhưng còn sát đáy màn
+  - CTA thật vẫn nằm dưới fold
+  - patch cũ vẫn tap luôn nên click trúng ảnh/product area
+- Đã sửa tiếp:
+  - nếu `Invitation anchor` còn sát đáy màn (`bottom_pct >= 82`) thì bot phải scroll tiếp, không được tap
+  - nếu anchor đã lên vùng giữa dưới màn (`y_pct ~55-78`) thì mới cho phép tap tương đối ở dưới anchor
+  - `first-fold viewport fallback` chỉ còn dùng khi không có anchor hợp lệ
